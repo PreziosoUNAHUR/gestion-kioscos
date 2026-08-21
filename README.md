@@ -103,49 +103,5 @@ npx expo reset       # Resetear el proyecto
 npm run lint         # Linting de código
 ```
 
-### 📱 Para comenzar
 
-1. `npm install` - Instalar todas las dependencias
-2. `npx expo start` - Iniciar el desarrollo
-3. Escanear el código QR con la app **Expo Go** en el dispositivo
-
-### 📸 Pantallas
-
-La aplicación incluye las siguientes vistas:
-
-- **Home** con buscador en tiempo real
-- **Inventario** con lista filtrada y stock baixo alert
-- **Caja** con total y historial detallado
-- **Estadísticas** con KPIs y gráficos interactivos
-- **Venta Manual** y **Venta por Barras** con confirmación
-
-### 🛠️ Desarrollo
-
-Para añadir nuevas funcionalidades:
-
-1. Crear un nuevo archivo en `/app/` siguiendo la convención de rutas
-2. Importar las utilidades necesarias de `/lib/db.ts`
-3. Agregar la pantalla al `/app/(tabs)/_layout.tsx` si necesita ser accesible desde el tab bar
-4. Agregar la pantalla a `package.json` scripts si requiere build nativo
-
-### 📦 Nuevas Librerías Agregadas
-
-| Librería | Version | Para qué sirve |
-|----------|---------|----------------|
-| `expo-sqlite` | ^0.1.0 | Base de datos local permanente |
-| `expo-image-picker` | ~8.0.0 | Cámara y galería de fotos |
-| `expo-mail-composer` | ^15.0.0 | Envío de emails con reportes |
-| `victory-native` | ^41.26.0 | Gráficos de barras y pastel |
-| `@shopify/react-native-skia` | ^2.2.12 | Motor de renderizado para los gráficos |
-| `react-native-paper` | ^5.15.3 | Componentes de UI profesionales |
-
-### 📱 Expo Go Notes
-
-- Algunas funcionalidades requieren reiniciar el servidor (`Ctrl+C` y `npx expo start`)
-- La animación 'shift' entre tabs requiere Android 5+ e iOS 11+
-- `expo-sqlite` persiste los datos incluso al cerrar la app
-- `expo-mail-composer` abre el cliente de email nativo del dispositivo
-
----
-
-Desarrollado con ❤️ usando Expo y React Native.
+Desarrollado por Franco1 usando Expo y React Native.
