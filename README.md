@@ -1,4 +1,4 @@
-# Kiosco Manager - Frontend
+# Kiosco Manager
 
 ## 📱 Aplicación de Gestión de Kiosco
 
