@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import { PaperProvider } from 'react-native-paper';
 import { useEffect, useState } from 'react';
+import { useFonts } from 'expo-font';
 import 'react-native-reanimated';
 
 import { initDatabase } from '@/lib/db';
@@ -15,21 +16,26 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const [isReady, setIsReady] = useState(false);
+  const [dbReady, setDbReady] = useState(false);
+  const [fontsLoaded] = useFonts({
+    'Satoshi-Regular': require('../assets/fonts/Satoshi-Regular.otf'),
+    'Satoshi-Medium': require('../assets/fonts/Satoshi-Medium.otf'),
+    'Satoshi-Bold': require('../assets/fonts/Satoshi-Bold.otf'),
+  });
 
   useEffect(() => {
     initDatabase()
-      .then(() => setIsReady(true))
+      .then(() => setDbReady(true))
       .catch((err) => {
         console.error('DB init failed', err);
-        setIsReady(true);
+        setDbReady(true);
       });
   }, []);
 
-  if (!isReady) {
+  if (!fontsLoaded || !dbReady) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#6C5CE7" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
+        <ActivityIndicator size="large" color="#2547F4" />
       </View>
     );
   }

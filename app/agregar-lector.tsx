@@ -1,11 +1,11 @@
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Button } from 'react-native-paper';
 import { useState } from 'react';
-
-import { getProductos, agregarStock, type Producto } from '@/lib/db';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { getProductos, getProductoByBarcode, agregarStock, type Producto } from '@/lib/db';
 
 export default function AgregarLectorScreen() {
   const router = useRouter();
@@ -13,24 +13,57 @@ export default function AgregarLectorScreen() {
   const [cantidad, setCantidad] = useState('');
   const [producto, setProducto] = useState<Producto | null>(null);
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanned, setScanned] = useState(false);
 
-  const buscar = async () => {
-    const id = parseInt(code.trim(), 10);
-    if (Number.isNaN(id)) return;
-    const productos = await getProductos();
-    const found = productos.find((p) => p.id === id);
+  const buscar = async (barcode?: string) => {
+    const target = barcode ?? code.trim();
+    if (!target) return;
+    let found = await getProductoByBarcode(target);
     if (!found) {
-      Alert.alert('No encontrado', `No existe el producto con código ${id}`);
+      const id = parseInt(target, 10);
+      if (!Number.isNaN(id)) {
+        const all = await getProductos();
+        found = all.find((p) => p.id === id) || null;
+      }
+    }
+    if (!found) {
+      Alert.alert('No encontrado', `Código ${target} no existe`, [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Crear producto', onPress: () => router.push({ pathname: '/nueva-carga', params: { barcode: target } } as never) },
+      ]);
       setProducto(null);
     } else {
       setProducto(found);
+      setCode(target);
     }
+  };
+
+  const handleBarcodeScanned = ({ data }: { data: string }) => {
+    if (scanned) return;
+    setScanned(true);
+    setScanning(false);
+    buscar(data);
+    setTimeout(() => setScanned(false), 1500);
+  };
+
+  const startScan = async () => {
+    if (!permission?.granted) {
+      const res = await requestPermission();
+      if (!res.granted) {
+        Alert.alert('Permiso denegado', 'Necesitamos la cámara');
+        return;
+      }
+    }
+    setScanned(false);
+    setScanning(true);
   };
 
   const guardar = async () => {
     const qty = parseInt(cantidad, 10);
     if (!producto || Number.isNaN(qty) || qty <= 0) {
-      Alert.alert('Datos inválidos', 'Escanéá el producto y cargá una cantidad');
+      Alert.alert('Datos inválidos', 'Escaneá el producto y cargá una cantidad');
       return;
     }
     setSaving(true);
@@ -42,54 +75,82 @@ export default function AgregarLectorScreen() {
       Alert.alert('Stock actualizado', `Se sumaron ${qty} unidades a ${producto.nombre}`);
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'No se pudo actualizar el stock');
+      Alert.alert('Error', 'No se pudo actualizar');
     } finally {
       setSaving(false);
     }
   };
 
+  if (scanning) {
+    return (
+      <View style={styles.scannerContainer}>
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          onBarcodeScanned={handleBarcodeScanned}
+          barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'code128', 'qr', 'upc_a'] }}
+        />
+        <View style={styles.scannerOverlay}>
+          <Text style={styles.scannerText}>Apuntá al código de barras</Text>
+          <TouchableOpacity style={styles.scannerClose} onPress={() => setScanning(false)}>
+            <Ionicons name="close" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Ionicons name="arrow-back" size={24} color="#212529" />
+        <Ionicons name="arrow-back" size={24} color="#0F172A" />
+      </TouchableOpacity>
+      <Text style={styles.title}>Lector de Barras</Text>
+      <Text style={styles.subtitle}>Escaneá el código y auto-completá el producto</Text>
+
+      <TouchableOpacity style={styles.scanCard} onPress={startScan}>
+        <View style={styles.scanIcon}>
+          <MaterialCommunityIcons name="barcode-scan" size={36} color="#FFFFFF" />
+        </View>
+        <Text style={styles.scanTitle}>Escanear Código</Text>
+        <Text style={styles.scanSubtitle}>Detecta y rellena datos automáticamente</Text>
       </TouchableOpacity>
 
-      <Text style={styles.title}>Lector de Barras</Text>
-
-      <View style={styles.scanBox}>
-        <Ionicons name="barcode-outline" size={26} color="#6C5CE7" />
+      <View style={styles.manualBox}>
+        <Ionicons name="keypad-outline" size={20} color="#64748B" />
         <TextInput
           style={styles.scanInput}
-          placeholder="Ingresá o escaneá el código"
-          placeholderTextColor="#ADB5BD"
+          placeholder="O ingresá el código manualmente"
+          placeholderTextColor="#94A3B8"
           keyboardType="numeric"
           value={code}
           onChangeText={setCode}
-          onSubmitEditing={buscar}
-          autoFocus
+          onSubmitEditing={() => buscar()}
         />
-        <TouchableOpacity style={styles.scanBtn} onPress={buscar}>
-          <Ionicons name="search" size={22} color="#FFFFFF" />
+        <TouchableOpacity style={styles.searchBtn} onPress={() => buscar()}>
+          <Ionicons name="search" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
       {producto && (
         <View style={styles.productCard}>
           <Text style={styles.productName}>{producto.nombre}</Text>
-          <Text style={styles.productStock}>Stock actual: {producto.stock}</Text>
+          <Text style={styles.productDetail}>
+            Stock actual: {producto.stock} · ${producto.precio_venta}
+            {producto.barcode ? ` · ${producto.barcode}` : ''}
+          </Text>
           <TextInput
             style={styles.input}
             placeholder="Cantidad a sumar"
-            placeholderTextColor="#ADB5BD"
+            placeholderTextColor="#94A3B8"
             keyboardType="numeric"
             value={cantidad}
             onChangeText={setCantidad}
           />
           <Button
             mode="contained"
-            buttonColor="#6C5CE7"
+            buttonColor="#2547F4"
             textColor="#FFFFFF"
             icon="add-circle"
             style={styles.saveButton}
@@ -106,86 +167,94 @@ export default function AgregarLectorScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F4F5F7',
-    paddingHorizontal: 20,
-    paddingTop: 60,
+  container: { flex: 1, backgroundColor: '#F8FAFC', paddingHorizontal: 20, paddingTop: 60 },
+  backButton: { marginBottom: 16 },
+  title: { fontFamily: 'Satoshi-Bold', fontSize: 24, color: '#0F172A' },
+  subtitle: { fontFamily: 'Satoshi-Regular', fontSize: 13, color: '#64748B', marginBottom: 16 },
+  scanCard: {
+    backgroundColor: '#2547F4',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 14,
   },
-  backButton: {
-    marginBottom: 20,
+  scanIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: '#111111',
-    letterSpacing: -1,
-    marginBottom: 15,
-  },
-  scanBox: {
+  scanTitle: { fontFamily: 'Satoshi-Bold', fontSize: 16, color: '#FFFFFF' },
+  scanSubtitle: { fontFamily: 'Satoshi-Regular', fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 4 },
+  manualBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingHorizontal: 16,
+    borderRadius: 14,
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
   },
-  scanInput: {
-    flex: 1,
-    height: 48,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#212529',
-    marginLeft: 12,
-  },
-  scanBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#6C5CE7',
+  scanInput: { flex: 1, height: 44, fontFamily: 'Satoshi-Medium', fontSize: 14, color: '#0F172A', marginLeft: 10 },
+  searchBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#2547F4',
     alignItems: 'center',
     justifyContent: 'center',
   },
   productCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 18,
-    marginTop: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  productName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#212529',
-  },
-  productStock: {
-    fontSize: 14,
-    color: '#6C757D',
-    marginVertical: 6,
-  },
+  productName: { fontFamily: 'Satoshi-Bold', fontSize: 16, color: '#0F172A' },
+  productDetail: { fontFamily: 'Satoshi-Regular', fontSize: 13, color: '#64748B', marginVertical: 6 },
   input: {
+    fontFamily: 'Satoshi-Regular',
     height: 46,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#DEE2E6',
+    borderColor: '#E2E8F0',
     paddingHorizontal: 15,
     fontSize: 15,
-    color: '#212529',
+    color: '#0F172A',
     marginVertical: 10,
   },
-  saveButton: {
-    borderRadius: 14,
+  saveButton: { borderRadius: 12 },
+  saveContent: { paddingVertical: 6 },
+  scannerContainer: { flex: 1, backgroundColor: '#000' },
+  scannerOverlay: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  saveContent: {
-    paddingVertical: 6,
+  scannerText: {
+    fontFamily: 'Satoshi-Bold',
+    color: '#FFFFFF',
+    fontSize: 14,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 8,
+    borderRadius: 8,
+  },
+  scannerClose: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

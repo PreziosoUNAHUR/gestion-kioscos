@@ -1,75 +1,46 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-
+import { View, StyleSheet } from 'react-native';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { HapticTab } from '@/components/haptic-tab';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
-type IconName = 'home' | 'grid' | 'stats-chart';
-
-function TabCircle({
-  name,
-  color,
-  focused,
-}: {
-  name: IconName;
-  color: string;
-  focused: boolean;
-}) {
+function TabCircle({ focused, icon, color }: { focused: boolean; icon: React.ReactNode; color: string }) {
   return (
     <View
-      style={{
-        width: 54,
-        height: 54,
-        borderRadius: 27,
-        backgroundColor: focused ? '#6C5CE7' : '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: -14,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: focused ? 0.2 : 0.06,
-        shadowRadius: 6,
-        elevation: focused ? 4 : 1,
-      }}>
-      <Ionicons name={name} size={26} color={focused ? '#FFFFFF' : color} />
+      style={[
+        styles.circle,
+        focused
+          ? { backgroundColor: '#2547F4', shadowOpacity: 0.35, elevation: 8 }
+          : { backgroundColor: '#FFFFFF', shadowOpacity: 0.06, elevation: 1 },
+      ]}>
+      {icon}
     </View>
   );
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarButton: HapticTab,
         headerShown: false,
         animation: 'shift',
-        tabBarActiveTintColor: '#6C5CE7',
-        tabBarInactiveTintColor: '#ADB5BD',
-        tabBarStyle: {
-          backgroundColor: colorScheme === 'dark' ? '#1C1C1E' : '#FFFFFF',
-          borderTopLeftRadius: 26,
-          borderTopRightRadius: 26,
-          height: 78,
-          paddingTop: 6,
-          position: 'absolute',
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '700',
-          paddingBottom: 10,
-        },
+        tabBarActiveTintColor: '#2547F4',
+        tabBarInactiveTintColor: '#64748B',
+        tabBarStyle: styles.tabBar,
+        tabBarLabelStyle: styles.tabBarLabel,
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Inicio',
           tabBarIcon: ({ color, focused }) => (
-            <TabCircle name="home" color={color} focused={focused} />
+            <TabCircle
+              focused={!!focused}
+              color={color}
+              icon={<Feather name="home" size={22} color={focused ? '#FFFFFF' : color} />}
+            />
           ),
+          tabBarButton: HapticTab,
         }}
       />
       <Tabs.Screen
@@ -77,19 +48,62 @@ export default function TabLayout() {
         options={{
           title: 'Acciones',
           tabBarIcon: ({ color, focused }) => (
-            <TabCircle name="grid" color={color} focused={focused} />
+            <TabCircle
+              focused={!!focused}
+              color={color}
+              icon={<Ionicons name="grid" size={22} color={focused ? '#FFFFFF' : color} />}
+            />
           ),
+          tabBarButton: HapticTab,
         }}
       />
       <Tabs.Screen
         name="estadisticas"
         options={{
-          title: 'Stats',
+          title: 'Estadísticas',
           tabBarIcon: ({ color, focused }) => (
-            <TabCircle name="stats-chart" color={color} focused={focused} />
+            <TabCircle
+              focused={!!focused}
+              color={color}
+              icon={<Feather name="bar-chart-2" size={22} color={focused ? '#FFFFFF' : color} />}
+            />
           ),
+          tabBarButton: HapticTab,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    height: 78,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingBottom: 10,
+    paddingTop: 8,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    position: 'absolute',
+  },
+  tabBarLabel: {
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 11,
+    fontWeight: '600',
+    paddingBottom: 2,
+  },
+  circle: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -14,
+    shadowColor: '#2547F4',
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 8,
+  },
+});

@@ -87,7 +87,7 @@ export default function VentaManualScreen() {
       <StatusBar style="dark" />
 
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Ionicons name="arrow-back" size={24} color="#212529" />
+        <Ionicons name="arrow-back" size={24} color="#0F172A" />
       </TouchableOpacity>
 
       <Text style={styles.title}>Venta Manual</Text>
@@ -117,13 +117,13 @@ export default function VentaManualScreen() {
                 <TouchableOpacity
                   style={styles.stepperBtn}
                   onPress={() => setQty(item.id, qty - 1)}>
-                  <Ionicons name="remove" size={20} color="#6C5CE7" />
+                  <Ionicons name="remove" size={20} color="#2547F4" />
                 </TouchableOpacity>
                 <Text style={styles.stepperQty}>{qty}</Text>
                 <TouchableOpacity
                   style={styles.stepperBtn}
                   onPress={() => setQty(item.id, qty + 1)}>
-                  <Ionicons name="add" size={20} color="#6C5CE7" />
+                  <Ionicons name="add" size={20} color="#2547F4" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -138,7 +138,7 @@ export default function VentaManualScreen() {
         </View>
         <Button
           mode="contained"
-          buttonColor="#6C5CE7"
+          buttonColor="#2547F4"
           textColor="#FFFFFF"
           icon="checkmark-done"
           style={styles.confirmButton}
@@ -156,17 +156,17 @@ export default function VentaManualScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F5F7',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 20,
     paddingTop: 60,
   },
   backButton: {
     marginBottom: 20,
   },
-  title: {
+  title: { fontFamily: 'Satoshi-Bold',
     fontSize: 32,
     fontWeight: '900',
-    color: '#111111',
+    color: '#0F172A',
     letterSpacing: -1,
     marginBottom: 15,
   },
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     textAlign: 'center',
-    color: '#ADB5BD',
+    color: '#94A3B8',
     marginTop: 40,
   },
   card: {
@@ -194,20 +194,20 @@ const styles = StyleSheet.create({
   cardInfo: {
     flex: 1,
   },
-  cardName: {
+  cardName: { fontFamily: 'Satoshi-Bold',
     fontSize: 15,
     fontWeight: '700',
-    color: '#212529',
+    color: '#0F172A',
   },
-  cardPrice: {
+  cardPrice: { fontFamily: 'Satoshi-Bold',
     fontSize: 15,
     fontWeight: '800',
-    color: '#6C5CE7',
+    color: '#2547F4',
     marginTop: 2,
   },
-  cardStock: {
+  cardStock: { fontFamily: 'Satoshi-Regular',
     fontSize: 12,
-    color: '#ADB5BD',
+    color: '#94A3B8',
     marginTop: 2,
   },
   stepper: {
@@ -219,14 +219,14 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: '#EDE9FB',
+    backgroundColor: '#EEF2FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepperQty: {
+  stepperQty: { fontFamily: 'Satoshi-Bold',
     fontSize: 18,
     fontWeight: '800',
-    color: '#212529',
+    color: '#0F172A',
     minWidth: 24,
     textAlign: 'center',
   },
@@ -250,15 +250,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  totalLabel: {
+  totalLabel: { fontFamily: 'Satoshi-Bold',
     fontSize: 16,
     fontWeight: '700',
-    color: '#6C757D',
+    color: '#64748B',
   },
-  totalValue: {
+  totalValue: { fontFamily: 'Satoshi-Bold',
     fontSize: 26,
     fontWeight: '900',
-    color: '#212529',
+    color: '#0F172A',
   },
   confirmButton: {
     borderRadius: 14,

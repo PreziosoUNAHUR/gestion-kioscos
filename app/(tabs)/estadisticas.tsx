@@ -9,8 +9,8 @@ import { useFocusEffect } from 'expo-router';
 import { getVentas, getProductos, type Venta } from '@/lib/db';
 
 const CATEGORIES = [
-  { label: 'Bebidas', value: 45, color: '#6C5CE7' },
-  { label: 'Tabaquera', value: 30, color: '#00B894' },
+  { label: 'Bebidas', value: 45, color: '#2547F4' },
+  { label: 'Tabaquera', value: 30, color: '#10B981' },
   { label: 'Snacks', value: 15, color: '#E17055' },
   { label: 'Otros', value: 10, color: '#0984E3' },
 ];
@@ -52,8 +52,8 @@ export default function EstadisticasScreen() {
   })();
 
   const KPI = [
-    { label: 'Ventas hoy', value: `$${totalHoy}`, color: '#00B894' },
-    { label: 'Ticket prom.', value: `$${Math.round(ticketProm)}`, color: '#6C5CE7' },
+    { label: 'Ventas hoy', value: `$${totalHoy}`, color: '#10B981' },
+    { label: 'Ticket prom.', value: `$${Math.round(ticketProm)}`, color: '#2547F4' },
     { label: 'Productos', value: `${productosCount}`, color: '#E17055' },
   ];
 
@@ -133,7 +133,7 @@ export default function EstadisticasScreen() {
                 <Bar
                   points={points.value}
                   chartBounds={chartBounds}
-                  color="#6C5CE7"
+                  color="#2547F4"
                   roundedCorners={{ topLeft: 6, topRight: 6 }}
                 />
               )}
@@ -179,7 +179,7 @@ export default function EstadisticasScreen() {
       {/* Exportación */}
       <Button
         mode="contained"
-        buttonColor="#6C5CE7"
+        buttonColor="#2547F4"
         textColor="#FFFFFF"
         icon="download"
         style={styles.exportButton}
@@ -204,7 +204,7 @@ export default function EstadisticasScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F5F7',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 20,
     paddingTop: 60,
   },
@@ -214,15 +214,15 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 25,
   },
-  title: {
+  title: { fontFamily: 'Satoshi-Bold',
     fontSize: 32,
     fontWeight: '900',
-    color: '#111111',
+    color: '#0F172A',
     letterSpacing: -1,
   },
-  subtitle: {
+  subtitle: { fontFamily: 'Satoshi-Regular',
     fontSize: 16,
-    color: '#6C757D',
+    color: '#64748B',
     marginTop: 4,
     marginBottom: 5,
   },
@@ -245,14 +245,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
   },
-  kpiValue: {
+  kpiValue: { fontFamily: 'Satoshi-Bold',
     fontSize: 15,
     fontWeight: '800',
-    color: '#111111',
+    color: '#0F172A',
   },
-  kpiLabel: {
+  kpiLabel: { fontFamily: 'Satoshi-Regular',
     fontSize: 11,
-    color: '#ADB5BD',
+    color: '#94A3B8',
     marginVertical: 4,
     textAlign: 'center',
   },
@@ -271,10 +271,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  chartTitle: {
+  chartTitle: { fontFamily: 'Satoshi-Bold',
     fontSize: 16,
     fontWeight: '800',
-    color: '#212529',
+    color: '#0F172A',
   },
   chartArea: {
     height: 200,
@@ -285,10 +285,10 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingHorizontal: 8,
   },
-  chartLabel: {
+  chartLabel: { fontFamily: 'Satoshi-Medium',
     fontSize: 12,
     fontWeight: '600',
-    color: '#ADB5BD',
+    color: '#94A3B8',
   },
   pieRow: {
     flexDirection: 'row',
@@ -313,16 +313,16 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginRight: 10,
   },
-  legendText: {
+  legendText: { fontFamily: 'Satoshi-Medium',
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
-    color: '#212529',
+    color: '#0F172A',
   },
-  legendPct: {
+  legendPct: { fontFamily: 'Satoshi-Bold',
     fontSize: 13,
     fontWeight: '800',
-    color: '#6C757D',
+    color: '#64748B',
   },
   exportButton: {
     borderRadius: 16,

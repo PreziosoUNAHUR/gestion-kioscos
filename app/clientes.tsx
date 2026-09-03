@@ -1,27 +1,20 @@
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, TextInput } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Button, Dialog, Portal } from 'react-native-paper';
 
-import {
-  getClientes,
-  insertCliente,
-  actualizarDeuda,
-  type Cliente,
-} from '@/lib/db';
-
-type AdjustMode = 'add' | 'sub';
+import { FiadoItemCard } from '@/components/FiadoItemCard';
+import { getClientes, insertCliente, actualizarDeuda, type Cliente } from '@/lib/db';
 
 export default function ClientesScreen() {
   const router = useRouter();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
-  const [adjustTarget, setAdjustTarget] = useState<Cliente | null>(null);
-  const [adjustMode, setAdjustMode] = useState<AdjustMode>('add');
-  const [amount, setAmount] = useState('');
+  const [customAmount, setCustomAmount] = useState('');
+  const [customTarget, setCustomTarget] = useState<Cliente | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -31,9 +24,7 @@ export default function ClientesScreen() {
     }, []),
   );
 
-  const reload = async () => {
-    setClientes(await getClientes());
-  };
+  const reload = async () => setClientes(await getClientes());
 
   const addCliente = async () => {
     if (!newName.trim()) return;
@@ -43,136 +34,124 @@ export default function ClientesScreen() {
     reload();
   };
 
-  const openAdjust = (cliente: Cliente, mode: AdjustMode) => {
-    setAdjustTarget(cliente);
-    setAdjustMode(mode);
-    setAmount('');
-  };
-
-  const applyAdjust = async () => {
-    if (!adjustTarget) return;
-    const value = parseFloat(amount.replace(',', '.'));
-    if (Number.isNaN(value)) return;
-    const next =
-      adjustMode === 'add'
-        ? adjustTarget.deuda + value
-        : adjustTarget.deuda - value;
-    await actualizarDeuda(adjustTarget.id, next);
-    setAdjustTarget(null);
-    setAmount('');
+  const handleIncrement = async (id: string, step: number) => {
+    const cliente = clientes.find((c) => String(c.id) === id);
+    if (!cliente) return;
+    await actualizarDeuda(cliente.id, cliente.deuda + step);
     reload();
   };
 
-  const fmt = (n: number) => `$${n.toLocaleString('es-AR')}`;
+  const handleDecrement = async (id: string, step: number) => {
+    const cliente = clientes.find((c) => String(c.id) === id);
+    if (!cliente) return;
+    await actualizarDeuda(cliente.id, cliente.deuda - step);
+    reload();
+  };
+
+  const handleOptionsPress = (id: string) => {
+    const cliente = clientes.find((c) => String(c.id) === id);
+    if (!cliente) return;
+    setCustomTarget(cliente);
+    setCustomAmount('');
+  };
+
+  const applyCustomAmount = async () => {
+    if (!customTarget) return;
+    const value = parseFloat(customAmount.replace(',', '.'));
+    if (Number.isNaN(value)) {
+      Alert.alert('Monto inválido', 'Ingresá un número válido');
+      return;
+    }
+    await actualizarDeuda(customTarget.id, customTarget.deuda + value);
+    setCustomTarget(null);
+    setCustomAmount('');
+    reload();
+  };
 
   return (
     <>
       <View style={styles.container}>
         <StatusBar style="dark" />
-
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#212529" />
+          <Ionicons name="arrow-back" size={24} color="#0F172A" />
         </TouchableOpacity>
-
         <View style={styles.headerRow}>
           <Text style={styles.title}>Fiado</Text>
           <TouchableOpacity style={styles.addButton} onPress={() => setShowAdd(true)}>
             <Ionicons name="add" size={30} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
-
         <FlatList
           data={clientes}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>
-              Tocá el + para agregar tu primer cliente
-            </Text>
+            <Text style={styles.emptyText}>Tocá el + para agregar tu primer cliente</Text>
           }
           renderItem={({ item }) => (
-            <View style={styles.card}>
-              <View style={styles.cardInfo}>
-                <Text style={styles.cardName} numberOfLines={1}>
-                  {item.nombre}
-                </Text>
-                <Text
-                  style={[
-                    styles.cardDebt,
-                    item.deuda > 0 ? styles.cardDebtPos : styles.cardDebtFree,
-                  ]}>
-                  {item.deuda > 0
-                    ? `Debe ${fmt(item.deuda)}`
-                    : item.deuda < 0
-                      ? `A favor ${fmt(Math.abs(item.deuda))}`
-                      : 'Sin deuda'}
-                </Text>
-              </View>
-              <View style={styles.controls}>
-                <TouchableOpacity
-                  style={styles.controlBtn}
-                  onPress={() => openAdjust(item, 'sub')}>
-                  <Ionicons name="remove" size={24} color="#D63031" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.controlBtn, styles.controlBtnAdd]}
-                  onPress={() => openAdjust(item, 'add')}>
-                  <Ionicons name="add" size={24} color="#00B894" />
-                </TouchableOpacity>
-              </View>
-            </View>
+            <FiadoItemCard
+              id={String(item.id)}
+              nombre={item.nombre}
+              deuda={item.deuda}
+              onIncrement={handleIncrement}
+              onDecrement={handleDecrement}
+              onOptionsPress={handleOptionsPress}
+            />
           )}
         />
       </View>
-
-      {/* Diálogo: nuevo cliente */}
       <Portal>
         <Dialog visible={showAdd} onDismiss={() => setShowAdd(false)}>
-          <Dialog.Title>Nuevo cliente</Dialog.Title>
+          <Dialog.Title style={styles.dialogTitle}>Nuevo cliente</Dialog.Title>
           <Dialog.Content>
             <TextInput
               style={styles.dialogInput}
               placeholder="Nombre de la persona"
-              placeholderTextColor="#ADB5BD"
+              placeholderTextColor="#94A3B8"
               value={newName}
               onChangeText={setNewName}
               autoFocus
             />
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setShowAdd(false)}>Cancelar</Button>
-            <Button onPress={addCliente}>Agregar</Button>
+            <Button onPress={() => setShowAdd(false)}>
+              <Text style={styles.dialogBtnText}>Cancelar</Text>
+            </Button>
+            <Button onPress={addCliente}>
+              <Text style={styles.dialogBtnTextBold}>Agregar</Text>
+            </Button>
           </Dialog.Actions>
         </Dialog>
-
-        {/* Diálogo: ajustar deuda */}
-        <Dialog
-          visible={!!adjustTarget}
-          onDismiss={() => setAdjustTarget(null)}>
-          <Dialog.Title>
-            {adjustMode === 'add' ? 'Agregar deuda' : 'Quitar deuda'}
-          </Dialog.Title>
+        <Dialog visible={!!customTarget} onDismiss={() => setCustomTarget(null)}>
+          <Dialog.Title style={styles.dialogTitle}>Ajuste personalizado</Dialog.Title>
           <Dialog.Content>
-            {adjustTarget && (
+            {customTarget && (
               <Text style={styles.dialogFor}>
-                {adjustTarget.nombre} · debe {fmt(adjustTarget.deuda)}
+                {customTarget.nombre} ·{' '}
+                {customTarget.deuda > 0
+                  ? `debe $${customTarget.deuda.toLocaleString('es-AR')}`
+                  : customTarget.deuda < 0
+                    ? `a favor $${Math.abs(customTarget.deuda).toLocaleString('es-AR')}`
+                    : 'sin deuda'}
               </Text>
             )}
             <TextInput
               style={styles.dialogInput}
-              placeholder="Monto ($)"
-              placeholderTextColor="#ADB5BD"
+              placeholder="Monto (+ suma, - resta)"
+              placeholderTextColor="#94A3B8"
               keyboardType="decimal-pad"
-              value={amount}
-              onChangeText={setAmount}
+              value={customAmount}
+              onChangeText={setCustomAmount}
               autoFocus
             />
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setAdjustTarget(null)}>Cancelar</Button>
-            <Button onPress={applyAdjust}>
-              {adjustMode === 'add' ? 'Sumar' : 'Restar'}
+            <Button onPress={() => setCustomTarget(null)}>
+              <Text style={styles.dialogBtnText}>Cancelar</Text>
+            </Button>
+            <Button onPress={applyCustomAmount}>
+              <Text style={styles.dialogBtnTextBold}>Aplicar</Text>
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -182,15 +161,8 @@ export default function ClientesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F4F5F7',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-  },
-  backButton: {
-    marginBottom: 20,
-  },
+  container: { flex: 1, backgroundColor: '#F8FAFC', paddingHorizontal: 20, paddingTop: 60 },
+  backButton: { marginBottom: 20 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -198,92 +170,45 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
+    fontFamily: 'Satoshi-Bold',
     fontSize: 32,
     fontWeight: '900',
-    color: '#111111',
+    color: '#0F172A',
     letterSpacing: -1,
   },
   addButton: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#0984E3',
+    backgroundColor: '#2547F4',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0984E3',
+    shadowColor: '#2547F4',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 4,
   },
-  listContent: {
-    paddingBottom: 40,
-  },
+  listContent: { paddingBottom: 40 },
   emptyText: {
+    fontFamily: 'Satoshi-Regular',
     textAlign: 'center',
-    color: '#ADB5BD',
+    color: '#94A3B8',
     fontSize: 15,
     marginTop: 40,
   },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  cardInfo: {
-    flex: 1,
-  },
-  cardName: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#212529',
-  },
-  cardDebt: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginTop: 3,
-  },
-  cardDebtPos: {
-    color: '#D63031',
-  },
-  cardDebtFree: {
-    color: '#00B894',
-  },
-  controls: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  controlBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#FDEBEA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  controlBtnAdd: {
-    backgroundColor: '#E2F5EF',
-  },
+  dialogTitle: { fontFamily: 'Satoshi-Bold' },
   dialogInput: {
+    fontFamily: 'Satoshi-Regular',
     height: 46,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#DEE2E6',
+    borderColor: '#E2E8F0',
     paddingHorizontal: 15,
     fontSize: 15,
-    color: '#212529',
+    color: '#0F172A',
   },
-  dialogFor: {
-    fontSize: 14,
-    color: '#6C757D',
-    marginBottom: 12,
-  },
+  dialogFor: { fontFamily: 'Satoshi-Regular', fontSize: 14, color: '#64748B', marginBottom: 12 },
+  dialogBtnText: { fontFamily: 'Satoshi-Medium' },
+  dialogBtnTextBold: { fontFamily: 'Satoshi-Bold' },
 });

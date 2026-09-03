@@ -10,6 +10,7 @@ export interface Producto {
   precio_venta: number;
   stock: number;
   imagen_uri: string | null;
+  barcode?: string | null;
 }
 
 export interface Venta {
@@ -37,6 +38,7 @@ export interface NewProducto {
   precioVenta: number;
   stock: number;
   imagenUri: string | null;
+  barcode?: string | null;
 }
 
 function openDB(): Promise<SQLiteDatabase> {
@@ -57,7 +59,8 @@ export async function initDatabase(): Promise<void> {
       precio_costo REAL NOT NULL DEFAULT 0,
       precio_venta REAL NOT NULL DEFAULT 0,
       stock INTEGER NOT NULL DEFAULT 0,
-      imagen_uri TEXT
+      imagen_uri TEXT,
+      barcode TEXT
     );
 
     CREATE TABLE IF NOT EXISTS Ventas (
@@ -79,17 +82,21 @@ export async function initDatabase(): Promise<void> {
       productos TEXT NOT NULL DEFAULT ''
     );
   `);
+  try {
+    await db.execAsync('ALTER TABLE Productos ADD COLUMN barcode TEXT');
+  } catch {}
 }
 
 export async function insertProducto(producto: NewProducto): Promise<number> {
   const db = await openDB();
   const result = await db.runAsync(
-    'INSERT INTO Productos (nombre, precio_costo, precio_venta, stock, imagen_uri) VALUES (?, ?, ?, ?, ?)',
+    'INSERT INTO Productos (nombre, precio_costo, precio_venta, stock, imagen_uri, barcode) VALUES (?, ?, ?, ?, ?, ?)',
     producto.nombre,
     producto.precioCosto,
     producto.precioVenta,
     producto.stock,
     producto.imagenUri,
+    producto.barcode ?? null,
   );
   return result.lastInsertRowId;
 }
@@ -203,6 +210,16 @@ export async function updateProveedor(id: number, prov: NewProveedor): Promise<v
     prov.productos,
     id,
   );
+}
+
+export async function getProductoByBarcode(barcode: string): Promise<Producto | null> {
+  const db = await openDB();
+  return db.getFirstAsync<Producto>('SELECT * FROM Productos WHERE barcode = ?', barcode);
+}
+
+export async function getProductoById(id: number): Promise<Producto | null> {
+  const db = await openDB();
+  return db.getFirstAsync<Producto>('SELECT * FROM Productos WHERE id = ?', id);
 }
 
 export async function getVentas(): Promise<Venta[]> {

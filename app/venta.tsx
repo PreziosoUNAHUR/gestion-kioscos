@@ -1,100 +1,60 @@
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 export default function VentaScreen() {
   const router = useRouter();
-
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Ionicons name="arrow-back" size={24} color="#212529" />
+        <Ionicons name="arrow-back" size={24} color="#0F172A" />
       </TouchableOpacity>
+      <Text style={styles.title}>Venta Rápida</Text>
+      <Text style={styles.subtitle}>Elegí el modo de venta</Text>
 
-      <Text style={styles.title}>Nueva Venta</Text>
-      <Text style={styles.subtitle}>¿Cómo querés registrar la venta?</Text>
-
-      <TouchableOpacity
-        style={styles.optionCard}
-        onPress={() => router.push('/venta-manual' as never)}>
-        <View style={[styles.optionIcon, { backgroundColor: '#6C5CE7' }]}>
-          <Ionicons name="create" size={32} color="#FFFFFF" />
+      <TouchableOpacity style={styles.optionCard} onPress={() => router.push('/venta-manual' as never)}>
+        <View style={[styles.optionIcon, { backgroundColor: '#2547F4' }]}>
+          <Ionicons name="create-outline" size={32} color="#FFFFFF" />
         </View>
         <Text style={styles.optionTitle}>Venta Manual</Text>
-        <Text style={styles.optionSubtitle}>
-          Elegí los productos y cargá la venta a mano
-        </Text>
+        <Text style={styles.optionSubtitle}>Elegí productos y cargá cantidades</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.optionCard}
-        onPress={() => router.push('/venta-barras' as never)}>
-        <View style={[styles.optionIcon, { backgroundColor: '#00B894' }]}>
-          <Ionicons name="barcode" size={32} color="#FFFFFF" />
+      <TouchableOpacity style={styles.optionCard} onPress={() => router.push('/venta-barras' as never)}>
+        <View style={[styles.optionIcon, { backgroundColor: '#10B981' }]}>
+          <MaterialCommunityIcons name="barcode-scan" size={32} color="#FFFFFF" />
         </View>
-        <Text style={styles.optionTitle}>Venta por Barras</Text>
-        <Text style={styles.optionSubtitle}>
-          Escaneá el código de barras del producto
-        </Text>
+        <Text style={styles.optionTitle}>Venta por Código de Barras</Text>
+        <Text style={styles.optionSubtitle}>Apuntá la cámara al código y vendé</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F4F5F7',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-  },
-  backButton: {
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#111111',
-    letterSpacing: -1,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6C757D',
-    marginTop: 5,
-    marginBottom: 30,
-  },
+  container: { flex: 1, backgroundColor: '#F8FAFC', paddingHorizontal: 20, paddingTop: 60 },
+  backButton: { marginBottom: 20 },
+  title: { fontFamily: 'Satoshi-Bold', fontSize: 28, color: '#0F172A', letterSpacing: -1 },
+  subtitle: { fontFamily: 'Satoshi-Regular', fontSize: 14, color: '#64748B', marginTop: 4, marginBottom: 28 },
   optionCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 25,
+    borderRadius: 16,
+    padding: 24,
     alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   optionIcon: {
-    width: 70,
-    height: 70,
-    borderRadius: 22,
+    width: 64,
+    height: 64,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 15,
+    marginBottom: 14,
   },
-  optionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#212529',
-    marginBottom: 5,
-  },
-  optionSubtitle: {
-    fontSize: 14,
-    color: '#ADB5BD',
-    textAlign: 'center',
-  },
+  optionTitle: { fontFamily: 'Satoshi-Bold', fontSize: 17, color: '#0F172A', marginBottom: 4 },
+  optionSubtitle: { fontFamily: 'Satoshi-Regular', fontSize: 13, color: '#64748B', textAlign: 'center' },
 });

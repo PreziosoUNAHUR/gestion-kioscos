@@ -1,35 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Button } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
-
 import { insertProducto } from '@/lib/db';
 
 export default function NuevaCargaScreen() {
   const router = useRouter();
+  const { barcode: paramBarcode } = useLocalSearchParams<{ barcode?: string }>();
   const [photo, setPhoto] = useState<string | null>(null);
   const [nombre, setNombre] = useState('');
   const [precioCosto, setPrecioCosto] = useState('');
   const [precioVenta, setPrecioVenta] = useState('');
   const [stock, setStock] = useState('');
+  const [barcode, setBarcode] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (paramBarcode) setBarcode(String(paramBarcode));
+  }, [paramBarcode]);
 
   const takePhoto = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permiso denegado', 'Necesitamos la cámara para sacar la foto del producto');
+      Alert.alert('Permiso denegado', 'Necesitamos la cámara');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.7,
-      allowsEditing: false,
-    });
-    if (!result.canceled) {
-      setPhoto(result.assets[0].uri);
-    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false });
+    if (!result.canceled) setPhoto(result.assets[0].uri);
   };
 
   const clearForm = () => {
@@ -38,23 +38,21 @@ export default function NuevaCargaScreen() {
     setPrecioCosto('');
     setPrecioVenta('');
     setStock('');
+    setBarcode('');
   };
 
   const saveProduct = async () => {
     if (!nombre.trim() || !precioVenta.trim() || !stock.trim()) {
-      Alert.alert('Faltan datos', 'Completá el nombre, el precio de venta y el stock');
+      Alert.alert('Faltan datos', 'Completá nombre, precio de venta y stock');
       return;
     }
-
     const costo = parseFloat(precioCosto.replace(',', '.')) || 0;
     const venta = parseFloat(precioVenta.replace(',', '.'));
     const cantidad = parseInt(stock, 10);
-
     if (Number.isNaN(venta) || Number.isNaN(cantidad)) {
-      Alert.alert('Datos inválidos', 'Revisá los precios y el stock');
+      Alert.alert('Datos inválidos', 'Revisá precios y stock');
       return;
     }
-
     setSaving(true);
     try {
       await insertProducto({
@@ -63,72 +61,79 @@ export default function NuevaCargaScreen() {
         precioVenta: venta,
         stock: cantidad,
         imagenUri: photo,
+        barcode: barcode.trim() || null,
       });
       clearForm();
-      Alert.alert('Producto guardado', 'El producto se cargó al inventario', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      Alert.alert('Producto guardado', 'Se cargó al inventario', [{ text: 'OK', onPress: () => router.back() }]);
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'No se pudo guardar el producto');
+      Alert.alert('Error', 'No se pudo guardar');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <StatusBar style="dark" />
-
-      {/* Encabezado */}
       <View style={styles.headerRow}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#212529" />
+          <Ionicons name="arrow-back" size={24} color="#0F172A" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Nueva Carga</Text>
       </View>
 
-      {/* Zona de captura */}
       <TouchableOpacity style={styles.captureZone} onPress={takePhoto}>
         {photo ? (
           <Image source={{ uri: photo }} style={styles.captureImage} />
         ) : (
           <>
             <View style={styles.cameraIconCircle}>
-              <Ionicons name="camera" size={40} color="#6C5CE7" />
+              <Ionicons name="camera" size={40} color="#2547F4" />
             </View>
             <Text style={styles.captureText}>Tocar para sacar foto</Text>
-            <Text style={styles.captureSubText}>o agregar desde la galería</Text>
+            <Text style={styles.captureSubText}>o agregar desde galería</Text>
           </>
         )}
       </TouchableOpacity>
 
-      {/* Formulario */}
       <Text style={styles.sectionTitle}>Datos del producto</Text>
       <View style={styles.formCard}>
         <TextInput
           style={styles.input}
           placeholder="Nombre del producto"
-          placeholderTextColor="#ADB5BD"
+          placeholderTextColor="#94A3B8"
           value={nombre}
           onChangeText={setNombre}
         />
+        <View style={styles.barcodeRow}>
+          <TextInput
+            style={[styles.input, { flex: 1, marginBottom: 0 }]}
+            placeholder="Código de barras"
+            placeholderTextColor="#94A3B8"
+            value={barcode}
+            onChangeText={setBarcode}
+            keyboardType="numeric"
+          />
+          <TouchableOpacity
+            style={styles.barcodeBtn}
+            onPress={() => router.push('/agregar-lector' as never)}>
+            <MaterialCommunityIcons name="barcode-scan" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
         <View style={styles.row}>
           <TextInput
             style={[styles.input, styles.inputHalf]}
-            placeholder="Precio de costo ($)"
-            placeholderTextColor="#ADB5BD"
+            placeholder="Costo ($)"
+            placeholderTextColor="#94A3B8"
             keyboardType="decimal-pad"
             value={precioCosto}
             onChangeText={setPrecioCosto}
           />
           <TextInput
             style={[styles.input, styles.inputHalf]}
-            placeholder="Precio de venta ($)"
-            placeholderTextColor="#ADB5BD"
+            placeholder="Venta ($)"
+            placeholderTextColor="#94A3B8"
             keyboardType="decimal-pad"
             value={precioVenta}
             onChangeText={setPrecioVenta}
@@ -136,18 +141,17 @@ export default function NuevaCargaScreen() {
         </View>
         <TextInput
           style={styles.input}
-          placeholder="Stock inicial (cantidad)"
-          placeholderTextColor="#ADB5BD"
+          placeholder="Stock inicial"
+          placeholderTextColor="#94A3B8"
           keyboardType="numeric"
           value={stock}
           onChangeText={setStock}
         />
       </View>
 
-      {/* Guardar */}
       <Button
         mode="contained"
-        buttonColor="#6C5CE7"
+        buttonColor="#2547F4"
         textColor="#FFFFFF"
         icon="checkmark-done"
         style={styles.saveButton}
@@ -162,102 +166,66 @@ export default function NuevaCargaScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F4F5F7',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-  },
-  content: {
-    paddingBottom: 100,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  backButton: {
-    marginRight: 15,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#111111',
-    letterSpacing: -1,
-  },
+  container: { flex: 1, backgroundColor: '#F8FAFC', paddingHorizontal: 20, paddingTop: 60 },
+  content: { paddingBottom: 100 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  backButton: { marginRight: 15 },
+  headerTitle: { fontFamily: 'Satoshi-Bold', fontSize: 24, color: '#0F172A', letterSpacing: -0.5 },
   captureZone: {
     height: 220,
-    borderRadius: 24,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
-    borderColor: '#E2DCFA',
+    borderColor: '#E0E7FF',
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 25,
+    marginBottom: 20,
     overflow: 'hidden',
   },
-  captureImage: {
-    width: '100%',
-    height: '100%',
-  },
+  captureImage: { width: '100%', height: '100%' },
   cameraIconCircle: {
     width: 84,
     height: 84,
     borderRadius: 42,
-    backgroundColor: '#EDE9FB',
+    backgroundColor: '#EEF2FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
-  captureText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#6C5CE7',
-  },
-  captureSubText: {
-    fontSize: 13,
-    color: '#ADB5BD',
-    marginTop: 4,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#6C757D',
-    marginBottom: 12,
-  },
+  captureText: { fontFamily: 'Satoshi-Bold', fontSize: 16, color: '#2547F4' },
+  captureSubText: { fontFamily: 'Satoshi-Regular', fontSize: 13, color: '#94A3B8', marginTop: 4 },
+  sectionTitle: { fontFamily: 'Satoshi-Bold', fontSize: 16, color: '#475569', marginBottom: 12 },
   formCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   input: {
+    fontFamily: 'Satoshi-Regular',
     height: 48,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#DEE2E6',
+    borderColor: '#E2E8F0',
     paddingHorizontal: 15,
     fontSize: 15,
-    color: '#212529',
+    color: '#0F172A',
     marginBottom: 12,
   },
-  row: {
-    flexDirection: 'row',
-    gap: 10,
+  barcodeRow: { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'center' },
+  barcodeBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#2547F4',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  inputHalf: {
-    flex: 1,
-  },
-  saveButton: {
-    borderRadius: 16,
-  },
-  saveContent: {
-    paddingVertical: 10,
-  },
+  row: { flexDirection: 'row', gap: 10 },
+  inputHalf: { flex: 1 },
+  saveButton: { borderRadius: 16 },
+  saveContent: { paddingVertical: 10 },
 });

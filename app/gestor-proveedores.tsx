@@ -83,7 +83,7 @@ export default function ProveedoresScreen() {
         <StatusBar style="dark" />
 
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#212529" />
+          <Ionicons name="arrow-back" size={24} color="#0F172A" />
         </TouchableOpacity>
 
         <View style={styles.headerRow}>
@@ -122,7 +122,7 @@ export default function ProveedoresScreen() {
                   </Text>
                 </View>
                 <TouchableOpacity style={styles.iconBtn} onPress={() => openEdit(item)}>
-                  <Ionicons name="construct" size={24} color="#6C5CE7" />
+                  <Ionicons name="construct" size={24} color="#2547F4" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.iconBtn} onPress={() => sendWhatsapp(item)}>
                   <Ionicons name="logo-whatsapp" size={26} color="#25D366" />
@@ -141,14 +141,14 @@ export default function ProveedoresScreen() {
             <TextInput
               style={styles.input}
               placeholder="Nombre del proveedor"
-              placeholderTextColor="#ADB5BD"
+              placeholderTextColor="#94A3B8"
               value={nombre}
               onChangeText={setNombre}
             />
             <TextInput
               style={styles.input}
               placeholder="Número de WhatsApp"
-              placeholderTextColor="#ADB5BD"
+              placeholderTextColor="#94A3B8"
               keyboardType="phone-pad"
               value={whatsapp}
               onChangeText={setWhatsapp}
@@ -156,7 +156,7 @@ export default function ProveedoresScreen() {
             <TextInput
               style={[styles.input, styles.multiline]}
               placeholder="Productos a pedir (uno por línea, ej: 2x leches verdes)"
-              placeholderTextColor="#ADB5BD"
+              placeholderTextColor="#94A3B8"
               multiline
               value={productos}
               onChangeText={setProductos}
@@ -175,7 +175,7 @@ export default function ProveedoresScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F5F7',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 20,
     paddingTop: 60,
   },
@@ -188,10 +188,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 20,
   },
-  title: {
+  title: { fontFamily: 'Satoshi-Bold',
     fontSize: 32,
     fontWeight: '900',
-    color: '#111111',
+    color: '#0F172A',
     letterSpacing: -1,
   },
   addButton: {
@@ -228,11 +228,11 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  emptyText: {
+  emptyText: { fontFamily: 'Satoshi-Bold',
     marginTop: 16,
     fontSize: 16,
     fontWeight: '700',
-    color: '#6C757D',
+    color: '#64748B',
   },
   card: {
     flexDirection: 'row',
@@ -259,14 +259,14 @@ const styles = StyleSheet.create({
   cardInfo: {
     flex: 1,
   },
-  cardName: {
+  cardName: { fontFamily: 'Satoshi-Bold',
     fontSize: 16,
     fontWeight: '800',
-    color: '#212529',
+    color: '#0F172A',
   },
-  cardProducts: {
+  cardProducts: { fontFamily: 'Satoshi-Regular',
     fontSize: 13,
-    color: '#ADB5BD',
+    color: '#94A3B8',
     marginTop: 2,
   },
   iconBtn: {
@@ -276,14 +276,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: 4,
   },
-  input: {
+  input: { fontFamily: 'Satoshi-Regular',
     height: 46,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#DEE2E6',
+    borderColor: '#E2E8F0',
     paddingHorizontal: 15,
     fontSize: 15,
-    color: '#212529',
+    color: '#0F172A',
     marginBottom: 12,
   },
   multiline: {

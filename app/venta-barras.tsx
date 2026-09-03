@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, TextInput, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Button } from 'react-native-paper';
-
-import { getProductos, realizarVenta, type Producto } from '@/lib/db';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { getProductos, getProductoByBarcode, realizarVenta, type Producto } from '@/lib/db';
 
 type CartLine = { producto: Producto; qty: number };
 
@@ -15,6 +15,9 @@ export default function VentaBarrasScreen() {
   const [code, setCode] = useState('');
   const [cart, setCart] = useState<CartLine[]>([]);
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanned, setScanned] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -26,26 +29,37 @@ export default function VentaBarrasScreen() {
 
   const total = cart.reduce((s, l) => s + l.producto.precio_venta * l.qty, 0);
 
-  const agregar = () => {
-    const id = parseInt(code.trim(), 10);
-    if (Number.isNaN(id)) {
-      Alert.alert('Código inválido', 'Ingresá un código de producto válido');
-      return;
-    }
-    const producto = productos.find((p) => p.id === id);
+  const addByBarcode = async (barcode: string) => {
+    let producto = await getProductoByBarcode(barcode);
     if (!producto) {
-      Alert.alert('No encontrado', `No existe el producto con código ${id}`);
+      const id = parseInt(barcode, 10);
+      if (!Number.isNaN(id)) producto = productos.find((p) => p.id === id) || null;
+    }
+    if (!producto) {
+      Alert.alert('No encontrado', `Código ${barcode} no existe. ¿Crear producto?`, [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Crear', onPress: () => router.push({ pathname: '/nueva-carga', params: { barcode } } as never) },
+      ]);
       return;
     }
     setCart((prev) => {
-      const existing = prev.find((l) => l.producto.id === id);
-      if (existing) {
-        return prev.map((l) =>
-          l.producto.id === id ? { ...l, qty: l.qty + 1 } : l,
-        );
-      }
-      return [...prev, { producto, qty: 1 }];
+      const existing = prev.find((l) => l.producto.id === producto!.id);
+      if (existing) return prev.map((l) => (l.producto.id === producto!.id ? { ...l, qty: l.qty + 1 } : l));
+      return [...prev, { producto: producto!, qty: 1 }];
     });
+  };
+
+  const handleBarcodeScanned = ({ data }: { data: string }) => {
+    if (scanned) return;
+    setScanned(true);
+    setScanning(false);
+    addByBarcode(data);
+    setTimeout(() => setScanned(false), 1500);
+  };
+
+  const agregar = () => {
+    if (!code.trim()) return;
+    addByBarcode(code.trim());
     setCode('');
   };
 
@@ -59,7 +73,7 @@ export default function VentaBarrasScreen() {
 
   const confirmar = async () => {
     if (cart.length === 0) {
-      Alert.alert('Carrito vacío', 'Escaneá o ingresá un producto primero');
+      Alert.alert('Carrito vacío', 'Escaneá un producto primero');
       return;
     }
     for (const line of cart) {
@@ -68,7 +82,6 @@ export default function VentaBarrasScreen() {
         return;
       }
     }
-
     setSaving(true);
     try {
       await realizarVenta(
@@ -80,9 +93,7 @@ export default function VentaBarrasScreen() {
         })),
       );
       setCart([]);
-      Alert.alert('¡Venta registrada!', `Total: $${total}`, [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      Alert.alert('Venta registrada', `Total: $${total}`, [{ text: 'OK', onPress: () => router.back() }]);
     } catch (err) {
       console.error(err);
       Alert.alert('Error', 'No se pudo completar la venta');
@@ -91,29 +102,66 @@ export default function VentaBarrasScreen() {
     }
   };
 
+  const startScan = async () => {
+    if (!permission?.granted) {
+      const res = await requestPermission();
+      if (!res.granted) {
+        Alert.alert('Permiso denegado', 'Necesitamos la cámara para leer códigos');
+        return;
+      }
+    }
+    setScanned(false);
+    setScanning(true);
+  };
+
+  if (scanning) {
+    return (
+      <View style={styles.scannerContainer}>
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          onBarcodeScanned={handleBarcodeScanned}
+          barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'code128', 'qr', 'upc_a'] }}
+        />
+        <View style={styles.scannerOverlay}>
+          <Text style={styles.scannerText}>Apuntá al código de barras</Text>
+          <TouchableOpacity style={styles.scannerClose} onPress={() => setScanning(false)}>
+            <Ionicons name="close" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Ionicons name="arrow-back" size={24} color="#212529" />
+        <Ionicons name="arrow-back" size={24} color="#0F172A" />
+      </TouchableOpacity>
+      <Text style={styles.title}>Venta por Código de Barras</Text>
+      <Text style={styles.subtitle}>La cámara detecta el código automáticamente</Text>
+
+      <TouchableOpacity style={styles.scanCard} onPress={startScan}>
+        <View style={styles.scanIcon}>
+          <MaterialCommunityIcons name="barcode-scan" size={36} color="#FFFFFF" />
+        </View>
+        <Text style={styles.scanTitle}>Escanear con Cámara</Text>
+        <Text style={styles.scanSubtitle}>Detecta EAN-13, QR y Code128 al instante</Text>
       </TouchableOpacity>
 
-      <Text style={styles.title}>Venta por Barras</Text>
-
-      <View style={styles.scanBox}>
-        <Ionicons name="barcode-outline" size={26} color="#00B894" />
+      <View style={styles.manualBox}>
+        <Ionicons name="keypad-outline" size={20} color="#64748B" />
         <TextInput
-          style={styles.scanInput}
-          placeholder="Ingresá o escaneá el código"
-          placeholderTextColor="#ADB5BD"
+          style={styles.manualInput}
+          placeholder="O ingresá el código manualmente"
+          placeholderTextColor="#94A3B8"
           keyboardType="numeric"
           value={code}
           onChangeText={setCode}
           onSubmitEditing={agregar}
-          autoFocus
         />
-        <TouchableOpacity style={styles.scanBtn} onPress={agregar}>
+        <TouchableOpacity style={styles.addBtn} onPress={agregar}>
           <Ionicons name="add" size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
@@ -125,8 +173,8 @@ export default function VentaBarrasScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyBox}>
-            <Ionicons name="barcode" size={40} color="#DEE2E6" />
-            <Text style={styles.emptyText}>El carrito está vacío</Text>
+            <MaterialCommunityIcons name="barcode" size={40} color="#E2E8F0" />
+            <Text style={styles.emptyText}>Escaneá un código para agregar</Text>
           </View>
         }
         renderItem={({ item }) => (
@@ -138,16 +186,12 @@ export default function VentaBarrasScreen() {
               <Text style={styles.cardPrice}>${item.producto.precio_venta}</Text>
             </View>
             <View style={styles.stepper}>
-              <TouchableOpacity
-                style={styles.stepperBtn}
-                onPress={() => setQty(item.producto.id, item.qty - 1)}>
-                <Ionicons name="remove" size={20} color="#00B894" />
+              <TouchableOpacity style={styles.stepperBtn} onPress={() => setQty(item.producto.id, item.qty - 1)}>
+                <Ionicons name="remove" size={20} color="#2547F4" />
               </TouchableOpacity>
               <Text style={styles.stepperQty}>{item.qty}</Text>
-              <TouchableOpacity
-                style={styles.stepperBtn}
-                onPress={() => setQty(item.producto.id, item.qty + 1)}>
-                <Ionicons name="add" size={20} color="#00B894" />
+              <TouchableOpacity style={styles.stepperBtn} onPress={() => setQty(item.producto.id, item.qty + 1)}>
+                <Ionicons name="add" size={20} color="#2547F4" />
               </TouchableOpacity>
             </View>
           </View>
@@ -161,7 +205,7 @@ export default function VentaBarrasScreen() {
         </View>
         <Button
           mode="contained"
-          buttonColor="#00B894"
+          buttonColor="#2547F4"
           textColor="#FFFFFF"
           icon="checkmark-done"
           style={styles.confirmButton}
@@ -177,144 +221,101 @@ export default function VentaBarrasScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F4F5F7',
-    paddingHorizontal: 20,
-    paddingTop: 60,
+  container: { flex: 1, backgroundColor: '#F8FAFC', paddingHorizontal: 20, paddingTop: 60 },
+  backButton: { marginBottom: 16 },
+  title: { fontFamily: 'Satoshi-Bold', fontSize: 24, color: '#0F172A' },
+  subtitle: { fontFamily: 'Satoshi-Regular', fontSize: 13, color: '#64748B', marginBottom: 16 },
+  scanCard: {
+    backgroundColor: '#2547F4',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 14,
   },
-  backButton: {
-    marginBottom: 20,
+  scanIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: '#111111',
-    letterSpacing: -1,
-    marginBottom: 15,
-  },
-  scanBox: {
+  scanTitle: { fontFamily: 'Satoshi-Bold', fontSize: 16, color: '#FFFFFF' },
+  scanSubtitle: { fontFamily: 'Satoshi-Regular', fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 4 },
+  manualBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingHorizontal: 16,
+    borderRadius: 14,
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
   },
-  scanInput: {
-    flex: 1,
-    height: 48,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#212529',
-    marginLeft: 12,
-  },
-  scanBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#00B894',
+  manualInput: { flex: 1, height: 44, fontFamily: 'Satoshi-Medium', fontSize: 14, color: '#0F172A', marginLeft: 10 },
+  addBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#2547F4',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  listContent: {
-    paddingBottom: 220,
-  },
-  emptyBox: {
-    alignItems: 'center',
-    marginTop: 50,
-  },
-  emptyText: {
-    color: '#ADB5BD',
-    marginTop: 10,
-  },
+  listContent: { paddingBottom: 180 },
+  emptyBox: { alignItems: 'center', marginTop: 30 },
+  emptyText: { fontFamily: 'Satoshi-Regular', color: '#94A3B8', marginTop: 10 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 14,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 1,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  cardInfo: {
-    flex: 1,
-  },
-  cardName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#212529',
-  },
-  cardPrice: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#00B894',
-    marginTop: 2,
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
+  cardInfo: { flex: 1 },
+  cardName: { fontFamily: 'Satoshi-Bold', fontSize: 14, color: '#0F172A' },
+  cardPrice: { fontFamily: 'Satoshi-Bold', fontSize: 13, color: '#2547F4', marginTop: 2 },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   stepperBtn: {
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: '#E2F5EF',
+    backgroundColor: '#EEF2FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepperQty: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#212529',
-    minWidth: 24,
-    textAlign: 'center',
-  },
+  stepperQty: { fontFamily: 'Satoshi-Bold', fontSize: 16, color: '#0F172A', minWidth: 24, textAlign: 'center' },
   footer: {
     position: 'absolute',
     left: 20,
     right: 20,
     bottom: 24,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     elevation: 6,
   },
-  totalRow: {
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  totalLabel: { fontFamily: 'Satoshi-Medium', fontSize: 14, color: '#64748B' },
+  totalValue: { fontFamily: 'Satoshi-Bold', fontSize: 22, color: '#0F172A' },
+  confirmButton: { borderRadius: 12 },
+  confirmContent: { paddingVertical: 6 },
+  scannerContainer: { flex: 1, backgroundColor: '#000' },
+  scannerOverlay: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    right: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#6C757D',
-  },
-  totalValue: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#212529',
-  },
-  confirmButton: {
-    borderRadius: 14,
-  },
-  confirmContent: {
-    paddingVertical: 6,
-  },
+  scannerText: { fontFamily: 'Satoshi-Bold', color: '#FFFFFF', fontSize: 14, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 8 },
+  scannerClose: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
 });
