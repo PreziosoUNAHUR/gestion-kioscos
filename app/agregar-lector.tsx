@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -16,6 +16,7 @@ export default function AgregarLectorScreen() {
   const [scanning, setScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const buscar = async (barcode?: string) => {
     const target = barcode ?? code.trim();
@@ -28,15 +29,42 @@ export default function AgregarLectorScreen() {
         found = all.find((p) => p.id === id) || null;
       }
     }
-    if (!found) {
-      Alert.alert('No encontrado', `Código ${target} no existe`, [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Crear producto', onPress: () => router.push({ pathname: '/nueva-carga', params: { barcode: target } } as never) },
-      ]);
-      setProducto(null);
-    } else {
+    if (found) {
       setProducto(found);
       setCode(target);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${target}.json`);
+      const data = await res.json();
+      if (data.status === 1) {
+        const nombreProducto = data.product.product_name || data.product.product_name_es || '';
+        const marca = data.product.brands || '';
+        const nombreCompleto = marca ? `${marca} ${nombreProducto}`.trim() : nombreProducto;
+        Alert.alert(
+          'Producto Encontrado',
+          `Internet dice que es: ${nombreCompleto}\nVamos a agregarle precio y stock.`,
+          [
+            {
+              text: 'Continuar',
+              onPress: () =>
+                router.push({
+                  pathname: '/nueva-carga',
+                  params: { codigo_barras: target, nombre_sugerido: nombreCompleto, imagen_url: data.product.image_url || '' },
+                } as never),
+            },
+          ],
+        );
+      } else {
+        Alert.alert('Producto Desconocido', 'No se encontró en tu kiosco ni en internet. Deberás cargarlo manualmente.', [
+          { text: 'Cargar Manual', onPress: () => router.push({ pathname: '/nueva-carga', params: { codigo_barras: target } } as never) },
+        ]);
+      }
+    } catch {
+      Alert.alert('Error de conexión', 'No se pudo buscar el producto en internet.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -133,6 +161,13 @@ export default function AgregarLectorScreen() {
         </TouchableOpacity>
       </View>
 
+      {loading && (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="large" color="#2547F4" />
+          <Text style={styles.loadingText}>Buscando producto...</Text>
+        </View>
+      )}
+
       {producto && (
         <View style={styles.productCard}>
           <Text style={styles.productName}>{producto.nombre}</Text>
@@ -152,7 +187,7 @@ export default function AgregarLectorScreen() {
             mode="contained"
             buttonColor="#2547F4"
             textColor="#FFFFFF"
-            icon="add-circle"
+            icon="plus-circle"
             style={styles.saveButton}
             contentStyle={styles.saveContent}
             loading={saving}
@@ -257,4 +292,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  loadingBox: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+  loadingText: { fontFamily: 'Satoshi-Medium', color: '#0F172A', marginTop: 8 },
 });

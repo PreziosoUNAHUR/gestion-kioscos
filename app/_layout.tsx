@@ -50,6 +50,7 @@ export default function RootLayout() {
           <Stack.Screen name="venta" options={{ headerShown: false }} />
           <Stack.Screen name="venta-manual" options={{ headerShown: false }} />
           <Stack.Screen name="venta-barras" options={{ headerShown: false }} />
+          <Stack.Screen name="venta-checkout" options={{ headerShown: false }} />
           <Stack.Screen name="agregar-stock" options={{ headerShown: false }} />
           <Stack.Screen name="agregar-lector" options={{ headerShown: false }} />
           <Stack.Screen name="nueva-carga" options={{ headerShown: false }} />

@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Button } from 'react-native-paper';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { getProductos, getProductoByBarcode, realizarVenta, type Producto } from '@/lib/db';
+import { getProductos, getProductoByBarcode, type Producto } from '@/lib/db';
 
 type CartLine = { producto: Producto; qty: number };
 
@@ -14,10 +14,10 @@ export default function VentaBarrasScreen() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [code, setCode] = useState('');
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -35,18 +35,46 @@ export default function VentaBarrasScreen() {
       const id = parseInt(barcode, 10);
       if (!Number.isNaN(id)) producto = productos.find((p) => p.id === id) || null;
     }
-    if (!producto) {
-      Alert.alert('No encontrado', `Código ${barcode} no existe. ¿Crear producto?`, [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Crear', onPress: () => router.push({ pathname: '/nueva-carga', params: { barcode } } as never) },
-      ]);
+    if (producto) {
+      setCart((prev) => {
+        const existing = prev.find((l) => l.producto.id === producto!.id);
+        if (existing) return prev.map((l) => (l.producto.id === producto!.id ? { ...l, qty: l.qty + 1 } : l));
+        return [...prev, { producto: producto!, qty: 1 }];
+      });
       return;
     }
-    setCart((prev) => {
-      const existing = prev.find((l) => l.producto.id === producto!.id);
-      if (existing) return prev.map((l) => (l.producto.id === producto!.id ? { ...l, qty: l.qty + 1 } : l));
-      return [...prev, { producto: producto!, qty: 1 }];
-    });
+    setLoading(true);
+    try {
+      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+      const data = await res.json();
+      if (data.status === 1) {
+        const nombreProducto = data.product.product_name || data.product.product_name_es || '';
+        const marca = data.product.brands || '';
+        const nombreCompleto = marca ? `${marca} ${nombreProducto}`.trim() : nombreProducto;
+        Alert.alert(
+          'Producto Encontrado',
+          `Internet dice que es: ${nombreCompleto}\nVamos a agregarle precio y stock.`,
+          [
+            {
+              text: 'Continuar',
+              onPress: () =>
+                router.push({
+                  pathname: '/nueva-carga',
+                  params: { codigo_barras: barcode, nombre_sugerido: nombreCompleto, imagen_url: data.product.image_url || '' },
+                } as never),
+            },
+          ],
+        );
+      } else {
+        Alert.alert('Producto Desconocido', 'No se encontró en tu kiosco ni en internet. Deberás cargarlo manualmente.', [
+          { text: 'Cargar Manual', onPress: () => router.push({ pathname: '/nueva-carga', params: { codigo_barras: barcode } } as never) },
+        ]);
+      }
+    } catch {
+      Alert.alert('Error de conexión', 'No se pudo buscar el producto en internet.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBarcodeScanned = ({ data }: { data: string }) => {
@@ -70,7 +98,6 @@ export default function VentaBarrasScreen() {
     }
     setCart((prev) => prev.map((l) => (l.producto.id === id ? { ...l, qty } : l)));
   };
-
   const confirmar = async () => {
     if (cart.length === 0) {
       Alert.alert('Carrito vacío', 'Escaneá un producto primero');
@@ -82,24 +109,10 @@ export default function VentaBarrasScreen() {
         return;
       }
     }
-    setSaving(true);
-    try {
-      await realizarVenta(
-        cart.map((l) => ({
-          productoId: l.producto.id,
-          cantidad: l.qty,
-          subtotal: l.producto.precio_venta * l.qty,
-          nuevoStock: l.producto.stock - l.qty,
-        })),
-      );
-      setCart([]);
-      Alert.alert('Venta registrada', `Total: $${total}`, [{ text: 'OK', onPress: () => router.back() }]);
-    } catch (err) {
-      console.error(err);
-      Alert.alert('Error', 'No se pudo completar la venta');
-    } finally {
-      setSaving(false);
-    }
+    router.push({
+      pathname: '/venta-checkout',
+      params: { cart: JSON.stringify(cart.map((l) => ({ producto: l.producto, qty: l.qty }))), total: String(total) },
+    } as never);
   };
 
   const startScan = async () => {
@@ -166,6 +179,13 @@ export default function VentaBarrasScreen() {
         </TouchableOpacity>
       </View>
 
+      {loading && (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="large" color="#2547F4" />
+          <Text style={styles.loadingText}>Buscando producto...</Text>
+        </View>
+      )}
+
       <FlatList
         data={cart}
         keyExtractor={(item) => String(item.producto.id)}
@@ -207,11 +227,9 @@ export default function VentaBarrasScreen() {
           mode="contained"
           buttonColor="#2547F4"
           textColor="#FFFFFF"
-          icon="checkmark-done"
+          icon="check"
           style={styles.confirmButton}
           contentStyle={styles.confirmContent}
-          loading={saving}
-          disabled={saving}
           onPress={confirmar}>
           Confirmar venta
         </Button>
@@ -318,4 +336,6 @@ const styles = StyleSheet.create({
   },
   scannerText: { fontFamily: 'Satoshi-Bold', color: '#FFFFFF', fontSize: 14, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 8 },
   scannerClose: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
+  loadingBox: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+  loadingText: { fontFamily: 'Satoshi-Medium', color: '#0F172A', marginTop: 8 },
 });

@@ -9,7 +9,12 @@ import { insertProducto } from '@/lib/db';
 
 export default function NuevaCargaScreen() {
   const router = useRouter();
-  const { barcode: paramBarcode } = useLocalSearchParams<{ barcode?: string }>();
+  const { barcode: paramBarcode, nombre_sugerido, imagen_url, codigo_barras } = useLocalSearchParams<{
+    barcode?: string;
+    codigo_barras?: string;
+    nombre_sugerido?: string;
+    imagen_url?: string;
+  }>();
   const [photo, setPhoto] = useState<string | null>(null);
   const [nombre, setNombre] = useState('');
   const [precioCosto, setPrecioCosto] = useState('');
@@ -19,8 +24,11 @@ export default function NuevaCargaScreen() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (paramBarcode) setBarcode(String(paramBarcode));
-  }, [paramBarcode]);
+    const code = (paramBarcode as string) || (codigo_barras as string) || '';
+    if (code) setBarcode(String(code));
+    if (nombre_sugerido) setNombre(String(nombre_sugerido));
+    if (imagen_url) setPhoto(String(imagen_url));
+  }, [paramBarcode, codigo_barras, nombre_sugerido, imagen_url]);
 
   const takePhoto = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -153,7 +161,7 @@ export default function NuevaCargaScreen() {
         mode="contained"
         buttonColor="#2547F4"
         textColor="#FFFFFF"
-        icon="checkmark-done"
+        icon="check"
         style={styles.saveButton}
         contentStyle={styles.saveContent}
         loading={saving}

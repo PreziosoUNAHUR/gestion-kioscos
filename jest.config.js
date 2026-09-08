@@ -1,0 +1,40 @@
+module.exports = {
+  preset: 'jest-expo',
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  collectCoverage: true,
+  coverageDirectory: 'coverage',
+  collectCoverageFrom: [
+    '**/*.{ts,tsx,js,jsx}',
+    '!**/coverage/**',
+    '!**/node_modules/**',
+    '!**/assets/**',
+    '!**/.expo/**',
+    '!**/jest.config.js',
+    '!**/jest.setup.js',
+    '!**/metro.config.js',
+    '!**/babel.config.js',
+    '!**/eslint.config.js',
+    '!**/*.web.{ts,tsx}',
+  ],
+  coverageThreshold: {
+    global: {
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70,
+    },
+  },
+  coveragePathIgnorePatterns: [
+    '/node_modules/',
+    '/assets/',
+    '/.expo/',
+    'jest.config.js',
+    'jest.setup.js',
+    'metro.config.js',
+    'babel.config.js',
+    'eslint.config.js',
+  ],
+  transformIgnorePatterns: [
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-clone-referenced-element|victory-native|@shopify/react-native-skia)',
+  ],
+};
