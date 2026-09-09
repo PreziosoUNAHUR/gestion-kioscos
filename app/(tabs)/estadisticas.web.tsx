@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, Alert, Share } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as MailComposer from 'expo-mail-composer';
 import { Button, Card } from 'react-native-paper';
 import { useFocusEffect } from 'expo-router';
-import { getVentas, getProductos, type Venta } from '@/lib/db';
+import { getVentas, getProductos, getVentasPorMetodo, getTopProductos, type Venta } from '@/lib/db';
+import { exportarExcelHistorial } from '@/lib/exportExcel';
 
 const CATEGORIES = [
   { label: 'Bebidas', value: 45, color: '#2547F4' },
@@ -16,13 +17,17 @@ const CATEGORIES = [
 export default function EstadisticasScreen() {
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [productosCount, setProductosCount] = useState(0);
+  const [porMetodo, setPorMetodo] = useState<{ metodo: string; total: number; count: number }[]>([]);
+  const [top, setTop] = useState<{ nombre: string; cantidad: number; total: number }[]>([]);
 
   useFocusEffect(
     useCallback(() => {
-      Promise.all([getVentas(), getProductos()])
-        .then(([v, p]) => {
+      Promise.all([getVentas(), getProductos(), getVentasPorMetodo(), getTopProductos(5)])
+        .then(([v, p, pm, t]) => {
           setVentas(v);
           setProductosCount(p.length);
+          setPorMetodo(pm);
+          setTop(t);
         })
         .catch((err) => console.error(err));
     }, []),
@@ -55,27 +60,30 @@ export default function EstadisticasScreen() {
     { label: 'Productos', value: `${productosCount}`, color: '#E17055' },
   ];
 
-  const exportCsv = () => {
-    const rows = ['id,total,fecha', ...ventas.map((v) => `${v.id},${v.total},${v.fecha}`)].join('\n');
-    Share.share({ message: `Estadísticas del kiosco\n\n${rows}` }).catch(() => {});
-  };
-
   const exportarEmail = async () => {
     const isAvailable = await MailComposer.isAvailableAsync();
     if (!isAvailable) {
       Alert.alert('No disponible', 'No hay app de email configurada en el dispositivo');
       return;
     }
+    const porMetodoTxt = porMetodo.map((m) => `${m.metodo}: $${m.total} (${m.count} tickets)`).join('\n');
+    const topTxt = top.length > 0 ? top.map((t) => `${t.nombre}: ${t.cantidad} u. ($${t.total})`).join('\n') : 'Sin datos';
     const body = [
-      'Reporte de Estadísticas',
-      `Fecha: ${new Date().toLocaleDateString('es-AR')}`,
-      `Ventas totales: ${ventas.length}`,
-      `Total acumulado: $${totalAll}`,
+      'Reporte de Estadísticas — Gestor Kioskos',
+      `Fecha: ${new Date().toLocaleString('es-AR')}`,
+      `Ventas totales: ${ventas.length} — Total: $${totalAll}`,
+      `Ticket prom: $${Math.round(ticketProm)} — Productos: ${productosCount}`,
       '',
-      'Detalle:',
-      ...ventas.map((v) => `${new Date(v.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} — $${v.total}`),
+      'Ventas por medio de pago:',
+      porMetodoTxt || 'Sin datos',
+      '',
+      'Top productos:',
+      topTxt,
+      '',
+      'Detalle (últimas 20):',
+      ...ventas.slice(0, 20).map((v) => `${new Date(v.fecha).toLocaleString('es-AR')} — $${v.total} [${v.metodo_pago || 'billete'}]`),
     ].join('\n');
-    await MailComposer.composeAsync({ subject: `Reporte deEstadísticas ${new Date().toLocaleDateString('es-AR')}`, body, isHtml: false });
+    await MailComposer.composeAsync({ subject: `Estadísticas ${new Date().toLocaleDateString('es-AR')} — $${totalAll}`, body, isHtml: false });
   };
 
   return (
@@ -132,8 +140,43 @@ export default function EstadisticasScreen() {
         </Card.Content>
       </Card>
 
-      <Button mode="contained" buttonColor="#2547F4" textColor="#FFFFFF" icon="download" style={styles.exportButton} contentStyle={styles.exportContent} onPress={exportCsv}>
-        Importar a Excel
+      <Card style={styles.chartCard}>
+        <Card.Title title="Ventas por medio de pago" titleStyle={styles.chartTitle} />
+        <Card.Content>
+          {porMetodo.length === 0 ? (
+            <Text style={styles.emptyText}>Sin ventas registradas</Text>
+          ) : (
+            porMetodo.map((m) => (
+              <View key={m.metodo} style={styles.metodoRow}>
+                <Text style={styles.metodoName}>{m.metodo === 'billete' ? 'Efectivo' : m.metodo === 'mercadopago' ? 'Mercado Pago' : m.metodo === 'cuentadni' ? 'Cuenta DNI' : m.metodo}</Text>
+                <Text style={styles.metodoValue}>${m.total.toLocaleString('es-AR')} · {m.count} tickets</Text>
+              </View>
+            ))
+          )}
+        </Card.Content>
+      </Card>
+
+      <Card style={styles.chartCard}>
+        <Card.Title title="Productos más vendidos" titleStyle={styles.chartTitle} />
+        <Card.Content>
+          {top.length === 0 ? (
+            <Text style={styles.emptyText}>Aún no hay productos vendidos</Text>
+          ) : (
+            top.map((t, idx) => (
+              <View key={t.nombre} style={styles.topRow}>
+                <Text style={styles.topRank}>#{idx + 1}</Text>
+                <Text style={styles.topName} numberOfLines={1}>
+                  {t.nombre}
+                </Text>
+                <Text style={styles.topQty}>{t.cantidad} u. · ${t.total.toLocaleString('es-AR')}</Text>
+              </View>
+            ))
+          )}
+        </Card.Content>
+      </Card>
+
+      <Button mode="contained" buttonColor="#2547F4" textColor="#FFFFFF" icon="download" style={styles.exportButton} contentStyle={styles.exportContent} onPress={exportarExcelHistorial}>
+        Exportar Excel (.xlsx)
       </Button>
       <Button mode="contained" buttonColor="#0984E3" textColor="#FFFFFF" icon="email" style={styles.exportButton} contentStyle={styles.exportContent} onPress={exportarEmail}>
         Enviar reporte por email
@@ -168,6 +211,14 @@ const styles = StyleSheet.create({
   legendDot: { width: 12, height: 12, borderRadius: 6 },
   legendText: { fontFamily: 'Satoshi-Medium', flex: 1, fontSize: 14, color: '#0F172A' },
   legendPct: { fontFamily: 'Satoshi-Bold', fontSize: 13, color: '#64748B' },
+  metodoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  metodoName: { fontFamily: 'Satoshi-Medium', fontSize: 14, color: '#0F172A' },
+  metodoValue: { fontFamily: 'Satoshi-Bold', fontSize: 13, color: '#2547F4' },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  topRank: { fontFamily: 'Satoshi-Bold', fontSize: 14, color: '#94A3B8', width: 28 },
+  topName: { fontFamily: 'Satoshi-Medium', fontSize: 14, color: '#0F172A', flex: 1 },
+  topQty: { fontFamily: 'Satoshi-Bold', fontSize: 13, color: '#64748B' },
+  emptyText: { fontFamily: 'Satoshi-Regular', textAlign: 'center', color: '#94A3B8', paddingVertical: 12 },
   exportButton: { borderRadius: 16, marginBottom: 15 },
   exportContent: { paddingVertical: 8 },
 });

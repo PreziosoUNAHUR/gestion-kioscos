@@ -4,16 +4,23 @@ import { Ionicons, Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/v
 import { useRouter, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as MailComposer from 'expo-mail-composer';
-import { getVentas, type Venta } from '@/lib/db';
+import { getVentas, getVentasPorMetodo, getTopProductos, type Venta } from '@/lib/db';
+import { exportarReporteCaja } from '@/lib/exportExcel';
 
 export default function CajaScreen() {
   const router = useRouter();
   const [ventas, setVentas] = useState<Venta[]>([]);
+  const [porMetodo, setPorMetodo] = useState<{ metodo: string; total: number; count: number }[]>([]);
+  const [top, setTop] = useState<{ nombre: string; cantidad: number; total: number }[]>([]);
 
   useFocusEffect(
     useCallback(() => {
-      getVentas()
-        .then(setVentas)
+      Promise.all([getVentas(), getVentasPorMetodo(), getTopProductos(5)])
+        .then(([v, pm, t]) => {
+          setVentas(v);
+          setPorMetodo(pm);
+          setTop(t);
+        })
         .catch((err) => console.error(err));
     }, []),
   );
@@ -25,6 +32,20 @@ export default function CajaScreen() {
   const hoy = filterHoy(ventas);
   const totalHoy = hoy.reduce((s, v) => s + v.total, 0);
   const ticketProm = hoy.length > 0 ? totalHoy / hoy.length : 0;
+  const porMetodoHoy = (() => {
+    const m = new Map<string, { total: number; count: number }>();
+    for (const v of hoy) {
+      const k = v.metodo_pago || 'billete';
+      const cur = m.get(k) || { total: 0, count: 0 };
+      cur.total += v.total;
+      cur.count += 1;
+      m.set(k, cur);
+    }
+    return Array.from(m.entries()).map(([metodo, v]) => ({ metodo, ...v }));
+  })();
+  const totalEfectivo = hoy.filter((v) => !v.metodo_pago || v.metodo_pago === 'billete' || v.metodo_pago === 'efectivo').reduce((s, v) => s + v.total, 0);
+  const totalMP = hoy.filter((v) => v.metodo_pago === 'mercadopago' || v.metodo_pago === 'mp').reduce((s, v) => s + v.total, 0);
+  const totalDNI = hoy.filter((v) => v.metodo_pago === 'cuentadni' || v.metodo_pago === 'dni').reduce((s, v) => s + v.total, 0);
 
   const enviarReporteEmail = async () => {
     const isAvailable = await MailComposer.isAvailableAsync();
@@ -32,23 +53,30 @@ export default function CajaScreen() {
       Alert.alert('No disponible', 'No hay app de email configurada');
       return;
     }
+    const porMetodoTxt = porMetodo.map((m) => `${m.metodo}: $${m.total} (${m.count} tickets)`).join('\n');
+    const topTxt = top.length > 0 ? top.map((t) => `${t.nombre}: ${t.cantidad} u. ($${t.total})`).join('\n') : 'Sin datos';
     const body = [
-      'Reporte de Caja y Ventas',
-      `Fecha: ${new Date().toLocaleDateString('es-AR')}`,
+      'Reporte de Caja y Ventas — Gestor Kioskos',
+      `Fecha: ${new Date().toLocaleString('es-AR')}`,
       `Total facturado: $${totalHoy.toLocaleString('es-AR')}`,
       `Tickets: ${hoy.length} · Promedio: $${ticketProm.toFixed(0)}`,
       '',
-      'Detalle:',
-      ...hoy.map(
-        (v) =>
-          `${new Date(v.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} — $${v.total}`,
-      ),
+      'Ventas por medio de pago:',
+      porMetodoTxt || 'Sin datos',
+      '',
+      'Top productos:',
+      topTxt,
+      '',
+      'Detalle hoy:',
+      ...hoy.map((v) => `${new Date(v.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} — $${v.total} [${v.metodo_pago || 'billete'}]`),
     ].join('\n');
     await MailComposer.composeAsync({
       subject: `Caja ${new Date().toLocaleDateString('es-AR')} — $${totalHoy}`,
       body,
     });
   };
+
+  const exportarExcel = () => exportarReporteCaja(hoy, { total: totalHoy, porMetodo, top });
 
   const formatAmount = (n: number) => `$${n.toLocaleString('es-AR')}`;
 
@@ -86,21 +114,21 @@ export default function CajaScreen() {
               <FontAwesome5 name="money-bill-wave" size={18} color="#10B981" />
             </View>
             <Text style={styles.breakdownLabel}>Efectivo</Text>
-            <Text style={styles.breakdownValue}>{formatAmount(totalHoy)}</Text>
+            <Text style={styles.breakdownValue}>{formatAmount(totalEfectivo)}</Text>
           </View>
           <View style={styles.breakdownCard}>
             <View style={[styles.breakdownIcon, { backgroundColor: '#E0F2FE' }]}>
               <MaterialCommunityIcons name="qrcode-scan" size={18} color="#0284C7" />
             </View>
             <Text style={styles.breakdownLabel}>Mercado Pago</Text>
-            <Text style={styles.breakdownValue}>$0</Text>
+            <Text style={styles.breakdownValue}>{formatAmount(totalMP)}</Text>
           </View>
           <View style={styles.breakdownCard}>
             <View style={[styles.breakdownIcon, { backgroundColor: '#DCFCE7' }]}>
               <Feather name="smartphone" size={18} color="#16A34A" />
             </View>
             <Text style={styles.breakdownLabel}>Cuenta DNI</Text>
-            <Text style={styles.breakdownValue}>$0</Text>
+            <Text style={styles.breakdownValue}>{formatAmount(totalDNI)}</Text>
           </View>
         </View>
 
@@ -123,13 +151,55 @@ export default function CajaScreen() {
                 </Text>
                 <Text style={styles.ticketDate}>{new Date(v.fecha).toLocaleDateString('es-AR')}</Text>
               </View>
-              <View style={styles.ticketBadge}>
-                <Text style={styles.ticketBadgeText}>Efectivo</Text>
+              <View style={[styles.ticketBadge, v.metodo_pago === 'mercadopago' || v.metodo_pago === 'mp' ? { backgroundColor: '#E0F2FE' } : v.metodo_pago === 'cuentadni' || v.metodo_pago === 'dni' ? { backgroundColor: '#DCFCE7' } : {}]}>
+                <Text style={[styles.ticketBadgeText, v.metodo_pago === 'mercadopago' || v.metodo_pago === 'mp' ? { color: '#0284C7' } : v.metodo_pago === 'cuentadni' || v.metodo_pago === 'dni' ? { color: '#16A34A' } : {}]}>
+                  {v.metodo_pago === 'mercadopago' || v.metodo_pago === 'mp' ? 'MP' : v.metodo_pago === 'cuentadni' || v.metodo_pago === 'dni' ? 'DNI' : 'Efectivo'}
+                </Text>
               </View>
               <Text style={styles.ticketAmount}>{formatAmount(v.total)}</Text>
             </View>
           ))
         )}
+
+        <View style={styles.detailCard}>
+          <Text style={styles.detailTitle}>Ventas por medio de pago (hoy)</Text>
+          {porMetodoHoy.length === 0 ? (
+            <Text style={styles.emptyText}>Sin ventas hoy</Text>
+          ) : (
+            porMetodoHoy.map((m) => (
+              <View key={m.metodo} style={styles.detailRow}>
+                <Text style={styles.detailName}>{m.metodo === 'billete' ? 'Efectivo' : m.metodo === 'mercadopago' ? 'Mercado Pago' : m.metodo === 'cuentadni' ? 'Cuenta DNI' : m.metodo}</Text>
+                <Text style={styles.detailValue}>
+                  ${m.total.toLocaleString('es-AR')} · {m.count} tickets
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={styles.detailCard}>
+          <Text style={styles.detailTitle}>Productos más vendidos</Text>
+          {top.length === 0 ? (
+            <Text style={styles.emptyText}>Aún no hay productos vendidos</Text>
+          ) : (
+            top.map((t, idx) => (
+              <View key={t.nombre} style={styles.detailRow}>
+                <Text style={styles.detailRank}>#{idx + 1}</Text>
+                <Text style={styles.detailName} numberOfLines={1}>
+                  {t.nombre}
+                </Text>
+                <Text style={styles.detailValue}>
+                  {t.cantidad} u. · ${t.total.toLocaleString('es-AR')}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+
+        <TouchableOpacity style={styles.excelBtn} onPress={exportarExcel}>
+          <Feather name="download" size={18} color="#FFFFFF" />
+          <Text style={styles.excelBtnText}>Exportar Excel (.xlsx)</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity style={styles.emailBtn} onPress={enviarReporteEmail}>
           <Feather name="mail" size={18} color="#FFFFFF" />
@@ -214,6 +284,37 @@ const styles = StyleSheet.create({
   ticketBadgeText: { fontFamily: 'Satoshi-Medium', fontSize: 11, color: '#10B981' },
   ticketAmount: { fontFamily: 'Satoshi-Bold', fontSize: 14, color: '#0F172A' },
   emptyText: { fontFamily: 'Satoshi-Regular', textAlign: 'center', color: '#94A3B8', paddingVertical: 24 },
+  detailCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 16,
+  },
+  detailTitle: { fontFamily: 'Satoshi-Bold', fontSize: 14, color: '#0F172A', marginBottom: 10 },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  detailName: { fontFamily: 'Satoshi-Medium', fontSize: 14, color: '#0F172A', flex: 1 },
+  detailValue: { fontFamily: 'Satoshi-Bold', fontSize: 13, color: '#2547F4' },
+  detailRank: { fontFamily: 'Satoshi-Bold', fontSize: 14, color: '#94A3B8', width: 28 },
+  excelBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#10B981',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+  },
+  excelBtnText: { fontFamily: 'Satoshi-Bold', color: '#FFFFFF', fontSize: 14 },
   emailBtn: {
     flexDirection: 'row',
     backgroundColor: '#2547F4',

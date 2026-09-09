@@ -110,17 +110,22 @@ export default function ProveedoresScreen() {
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
               <View style={styles.card}>
-                <View style={styles.cardIcon}>
-                  <Ionicons name="storefront" size={22} color="#E17055" />
-                </View>
-                <View style={styles.cardInfo}>
-                  <Text style={styles.cardName} numberOfLines={1}>
-                    {item.nombre}
-                  </Text>
-                  <Text style={styles.cardProducts} numberOfLines={1}>
-                    {item.productos ? `${item.productos.split('\n').length} productos` : 'Sin productos'}
-                  </Text>
-                </View>
+                <TouchableOpacity
+                  style={styles.cardMain}
+                  onPress={() => router.push({ pathname: '/proveedor-detalle', params: { id: String(item.id) } } as never)}
+                  activeOpacity={0.7}>
+                  <View style={styles.cardIcon}>
+                    <Ionicons name="storefront" size={22} color="#E17055" />
+                  </View>
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.cardName} numberOfLines={1}>
+                      {item.nombre}
+                    </Text>
+                    <Text style={styles.cardProducts} numberOfLines={1}>
+                      {item.productos ? `${item.productos.split('\n').length} productos` : 'Sin productos'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.iconBtn} onPress={() => openEdit(item)}>
                   <Ionicons name="construct" size={24} color="#2547F4" />
                 </TouchableOpacity>
@@ -135,8 +140,8 @@ export default function ProveedoresScreen() {
 
       {/* Diálogo: nuevo / editar proveedor */}
       <Portal>
-        <Dialog visible={showForm} onDismiss={() => setShowForm(false)}>
-          <Dialog.Title>{editing ? 'Editar proveedor' : 'Nuevo proveedor'}</Dialog.Title>
+        <Dialog style={{ backgroundColor: "#FFFFFF" }}  visible={showForm} onDismiss={() => setShowForm(false)}>
+          <Dialog.Title style={{ color: "#0F172A" }}>{editing ? 'Editar proveedor' : 'Nuevo proveedor'}</Dialog.Title>
           <Dialog.Content>
             <TextInput
               style={styles.input}
@@ -247,6 +252,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 1,
   },
+  cardMain: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   cardIcon: {
     width: 42,
     height: 42,

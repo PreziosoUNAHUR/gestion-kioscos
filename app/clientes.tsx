@@ -102,7 +102,7 @@ export default function ClientesScreen() {
         />
       </View>
       <Portal>
-        <Dialog visible={showAdd} onDismiss={() => setShowAdd(false)}>
+        <Dialog style={{ backgroundColor: "#FFFFFF" }}  visible={showAdd} onDismiss={() => setShowAdd(false)}>
           <Dialog.Title style={styles.dialogTitle}>Nuevo cliente</Dialog.Title>
           <Dialog.Content>
             <TextInput
@@ -123,7 +123,7 @@ export default function ClientesScreen() {
             </Button>
           </Dialog.Actions>
         </Dialog>
-        <Dialog visible={!!customTarget} onDismiss={() => setCustomTarget(null)}>
+        <Dialog style={{ backgroundColor: "#FFFFFF" }}  visible={!!customTarget} onDismiss={() => setCustomTarget(null)}>
           <Dialog.Title style={styles.dialogTitle}>Ajuste personalizado</Dialog.Title>
           <Dialog.Content>
             {customTarget && (

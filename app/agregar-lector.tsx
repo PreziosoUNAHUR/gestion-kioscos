@@ -6,6 +6,7 @@ import { Button } from 'react-native-paper';
 import { useState } from 'react';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { getProductos, getProductoByBarcode, agregarStock, type Producto } from '@/lib/db';
+import { buscarEnOpenFoodFacts } from '@/lib/openFoodFacts';
 
 export default function AgregarLectorScreen() {
   const router = useRouter();
@@ -36,26 +37,18 @@ export default function AgregarLectorScreen() {
     }
     setLoading(true);
     try {
-      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${target}.json`);
-      const data = await res.json();
-      if (data.status === 1) {
-        const nombreProducto = data.product.product_name || data.product.product_name_es || '';
-        const marca = data.product.brands || '';
-        const nombreCompleto = marca ? `${marca} ${nombreProducto}`.trim() : nombreProducto;
-        Alert.alert(
-          'Producto Encontrado',
-          `Internet dice que es: ${nombreCompleto}\nVamos a agregarle precio y stock.`,
-          [
-            {
-              text: 'Continuar',
-              onPress: () =>
-                router.push({
-                  pathname: '/nueva-carga',
-                  params: { codigo_barras: target, nombre_sugerido: nombreCompleto, imagen_url: data.product.image_url || '' },
-                } as never),
-            },
-          ],
-        );
+      const off = await buscarEnOpenFoodFacts(target);
+      if (off.found) {
+        Alert.alert('Producto Encontrado', `Internet dice que es: ${off.nombre}\nVamos a agregarle precio y stock.`, [
+          {
+            text: 'Continuar',
+            onPress: () =>
+              router.push({
+                pathname: '/nueva-carga',
+                params: { codigo_barras: target, nombre_sugerido: off.nombre, imagen_url: off.imagen_url || '' },
+              } as never),
+          },
+        ]);
       } else {
         Alert.alert('Producto Desconocido', 'No se encontró en tu kiosco ni en internet. Deberás cargarlo manualmente.', [
           { text: 'Cargar Manual', onPress: () => router.push({ pathname: '/nueva-carga', params: { codigo_barras: target } } as never) },

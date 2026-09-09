@@ -11,6 +11,8 @@ jest.mock('expo-sqlite', () => ({
         const txn = {
           runAsync: jest.fn().mockResolvedValue({ lastInsertRowId: 1, changes: 1 }),
           execAsync: jest.fn().mockResolvedValue(undefined),
+          getAllAsync: jest.fn().mockResolvedValue([]),
+          getFirstAsync: jest.fn().mockResolvedValue(null),
         };
         await cb(txn);
       }),
@@ -66,6 +68,23 @@ jest.mock('victory-native', () => ({
 jest.mock('expo-mail-composer', () => ({
   isAvailableAsync: jest.fn().mockResolvedValue(false),
   composeAsync: jest.fn(),
+}));
+
+jest.mock('expo-file-system', () => ({
+  writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
+  cacheDirectory: 'file:///cache/',
+  documentDirectory: 'file:///doc/',
+  EncodingType: { Base64: 'base64' },
+}));
+
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: jest.fn().mockResolvedValue(true),
+  shareAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('xlsx', () => ({
+  utils: { book_new: jest.fn(() => ({})), json_to_sheet: jest.fn(() => ({})), book_append_sheet: jest.fn() },
+  write: jest.fn(() => 'base64string'),
 }));
 
 global.__reanimatedWorkletInit = jest.fn();

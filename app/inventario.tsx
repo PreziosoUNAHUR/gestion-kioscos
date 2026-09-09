@@ -1,36 +1,118 @@
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View, TextInput, FlatList, TouchableOpacity, Image, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TextInput, FlatList, TouchableOpacity, Image, ScrollView, Alert } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { getProductos, type Producto } from '@/lib/db';
+import { getProductos, updateProducto, type Producto } from '@/lib/db';
 
-const CATEGORIES = ['Todos', 'Golosinas', 'Bebidas', 'Cigarrillos', 'Snacks'];
+const CATEGORIES = ['Todos', 'Golosinas', 'Bebidas', 'Cigarrillos', 'Snacks', 'Lácteos', 'Panificados', 'Almacén', 'Limpieza'];
 
 export default function InventarioScreen() {
   const router = useRouter();
   const [productos, setProductos] = useState<Producto[]>([]);
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState('Todos');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editNombre, setEditNombre] = useState('');
+  const [editPrecio, setEditPrecio] = useState('');
+  const [editStock, setEditStock] = useState('');
+  const [editCategoria, setEditCategoria] = useState('');
+
+  const load = useCallback(() => {
+    getProductos()
+      .then(setProductos)
+      .catch((err) => console.error(err));
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      getProductos()
-        .then(setProductos)
-        .catch((err) => console.error(err));
-    }, []),
+      load();
+    }, [load]),
   );
 
-  const filtered = productos.filter((p) => p.nombre.toLowerCase().includes(query.trim().toLowerCase()));
+  const filtered = productos.filter((p) => {
+    const matchQuery = p.nombre.toLowerCase().includes(query.trim().toLowerCase());
+    const matchCat = cat === 'Todos' || (p.categoria || 'Sin categoría') === cat;
+    return matchQuery && matchCat;
+  });
+
   const totalValuation = productos.reduce((s, p) => s + p.precio_venta * p.stock, 0);
   const lowCount = productos.filter((p) => p.stock <= 5).length;
 
+  const startEdit = (item: Producto) => {
+    setEditingId(item.id);
+    setEditNombre(item.nombre);
+    setEditPrecio(String(item.precio_venta));
+    setEditStock(String(item.stock));
+    setEditCategoria(item.categoria || '');
+  };
+
+  const saveEdit = async (id: number) => {
+    const precio = parseFloat(editPrecio.replace(',', '.'));
+    const stock = parseInt(editStock, 10);
+    if (!editNombre.trim() || Number.isNaN(precio) || Number.isNaN(stock)) {
+      Alert.alert('Datos inválidos', 'Revisá nombre, precio y stock');
+      return;
+    }
+    await updateProducto(id, {
+      nombre: editNombre.trim(),
+      precio_venta: precio,
+      stock,
+      categoria: editCategoria.trim() || undefined,
+    });
+    setEditingId(null);
+    load();
+  };
+
   const renderItem = ({ item }: { item: Producto }) => {
+    const isEditing = editingId === item.id;
     const margin = item.precio_costo > 0 ? ((item.precio_venta - item.precio_costo) / item.precio_costo) * 100 : 0;
-    const status =
-      item.stock === 0 ? 'Quiebre inminente' : item.stock <= 3 ? 'Reponer pronto' : item.stock <= 5 ? 'Stock bajo' : 'Stock óptimo';
-    const statusColor =
-      item.stock === 0 ? '#EF4444' : item.stock <= 3 ? '#F59E0B' : item.stock <= 5 ? '#F59E0B' : '#10B981';
+    const status = item.stock === 0 ? 'No hay más' : item.stock <= 3 ? 'Reponer pronto' : item.stock <= 5 ? 'Stock bajo' : 'Stock óptimo';
+    const statusColor = item.stock === 0 ? '#EF4444' : item.stock <= 3 ? '#F59E0B' : item.stock <= 5 ? '#F59E0B' : '#10B981';
+
+    if (isEditing) {
+      return (
+        <View style={[styles.card, styles.cardEditing]}>
+          <View style={styles.editForm}>
+            <TextInput style={styles.editInput} value={editNombre} onChangeText={setEditNombre} placeholder="Nombre" placeholderTextColor="#94A3B8" />
+            <View style={styles.editRow}>
+              <TextInput
+                style={[styles.editInput, { flex: 1 }]}
+                value={editPrecio}
+                onChangeText={setEditPrecio}
+                placeholder="Precio"
+                keyboardType="decimal-pad"
+                placeholderTextColor="#94A3B8"
+              />
+              <TextInput
+                style={[styles.editInput, { flex: 1 }]}
+                value={editStock}
+                onChangeText={setEditStock}
+                placeholder="Stock"
+                keyboardType="numeric"
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+            <TextInput
+              style={styles.editInput}
+              value={editCategoria}
+              onChangeText={setEditCategoria}
+              placeholder="Categoría (ej. Golosinas)"
+              placeholderTextColor="#94A3B8"
+            />
+            <View style={styles.editActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditingId(null)}>
+                <Text style={styles.cancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={() => saveEdit(item.id)}>
+                <Text style={styles.saveText}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.card}>
         <View style={styles.thumbnail}>
@@ -45,10 +127,15 @@ export default function InventarioScreen() {
             {item.nombre}
           </Text>
           <Text style={styles.cardPrice}>${item.precio_venta.toLocaleString('es-AR')}</Text>
-          <Text style={styles.cardMargin}>Margen {margin.toFixed(0)}% · Stock {item.stock}</Text>
+          <Text style={styles.cardMargin}>Margen {margin.toFixed(0)}% · Stock {item.stock} · {item.categoria || 'Sin tag'}</Text>
         </View>
-        <View style={[styles.chip, { backgroundColor: statusColor + '18', borderColor: statusColor + '30' }]}>
-          <Text style={[styles.chipText, { color: statusColor }]}>{status}</Text>
+        <View style={styles.cardActions}>
+          <View style={[styles.chip, { backgroundColor: statusColor + '18', borderColor: statusColor + '30' }]}>
+            <Text style={[styles.chipText, { color: statusColor }]}>{status}</Text>
+          </View>
+          <TouchableOpacity style={styles.editBtn} onPress={() => startEdit(item)}>
+            <Feather name="edit-2" size={16} color="#2547F4" />
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -86,10 +173,7 @@ export default function InventarioScreen() {
         contentContainerStyle={styles.pillsRow}
         style={styles.pillsScroll}>
         {CATEGORIES.map((c) => (
-          <TouchableOpacity
-            key={c}
-            style={[styles.pill, cat === c && styles.pillActive]}
-            onPress={() => setCat(c)}>
+          <TouchableOpacity key={c} style={[styles.pill, cat === c && styles.pillActive]} onPress={() => setCat(c)}>
             <Text style={[styles.pillText, cat === c && styles.pillTextActive]}>{c}</Text>
           </TouchableOpacity>
         ))}
@@ -113,9 +197,7 @@ export default function InventarioScreen() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            {query ? 'No se encontraron productos' : 'Todavía no hay productos cargados'}
-          </Text>
+          <Text style={styles.emptyText}>{query ? 'No se encontraron productos' : 'Todavía no hay productos cargados'}</Text>
         }
       />
 
@@ -179,6 +261,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
+  cardEditing: { flexDirection: 'column', alignItems: 'stretch' },
+  editForm: { gap: 8 },
+  editInput: {
+    fontFamily: 'Satoshi-Regular',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#0F172A',
+    backgroundColor: '#FFFFFF',
+  },
+  editRow: { flexDirection: 'row', gap: 8 },
+  editActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 6 },
+  cancelBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F1F5F9' },
+  cancelText: { fontFamily: 'Satoshi-Medium', color: '#475569' },
+  saveBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: '#2547F4' },
+  saveText: { fontFamily: 'Satoshi-Bold', color: '#FFFFFF' },
   thumbnail: {
     width: 52,
     height: 52,
@@ -194,8 +295,10 @@ const styles = StyleSheet.create({
   cardName: { fontFamily: 'Satoshi-Bold', fontSize: 14, color: '#0F172A' },
   cardPrice: { fontFamily: 'Satoshi-Bold', fontSize: 16, color: '#2547F4', marginTop: 2 },
   cardMargin: { fontFamily: 'Satoshi-Regular', fontSize: 11, color: '#64748B', marginTop: 2 },
-  chip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1 },
+  cardActions: { alignItems: 'flex-end', gap: 8 },
+  chip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, alignSelf: 'flex-end' },
   chipText: { fontFamily: 'Satoshi-Bold', fontSize: 10 },
+  editBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' },
   emptyText: { fontFamily: 'Satoshi-Regular', textAlign: 'center', color: '#94A3B8', marginTop: 40 },
   fab: {
     position: 'absolute',

@@ -212,8 +212,8 @@ export default function VentaCheckoutScreen() {
       </View>
 
       <Portal>
-        <Dialog visible={showPago} onDismiss={() => setShowPago(false)}>
-          <Dialog.Title style={styles.dialogTitle}>¿Cómo te están pagando?</Dialog.Title>
+        <Dialog style={{ backgroundColor: '#FFFFFF' }} visible={showPago} onDismiss={() => setShowPago(false)}>
+          <Dialog.Title style={[styles.dialogTitle, { color: '#0F172A' }]}>¿Cómo te están pagando?</Dialog.Title>
           <Dialog.Content>
             <TouchableOpacity style={styles.pagoOption} onPress={() => onPagoSelect('efectivo')}>
               <Ionicons name="cash-outline" size={22} color="#10B981" />
@@ -229,11 +229,11 @@ export default function VentaCheckoutScreen() {
             </TouchableOpacity>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setShowPago(false)}>Cancelar</Button>
+            <Button onPress={() => setShowPago(false)}><Text style={{ color: '#0F172A', fontFamily: 'Satoshi-Medium' }}>Cancelar</Text></Button>
           </Dialog.Actions>
         </Dialog>
-        <Dialog visible={showFiado} onDismiss={() => setShowFiado(false)}>
-          <Dialog.Title style={styles.dialogTitle}>Elegí el cliente para fiado</Dialog.Title>
+        <Dialog style={{ backgroundColor: '#FFFFFF' }} visible={showFiado} onDismiss={() => setShowFiado(false)}>
+          <Dialog.Title style={[styles.dialogTitle, { color: '#0F172A' }]}>Elegí el cliente para fiado</Dialog.Title>
           <Dialog.Content>
             {clientes.length === 0 ? (
               <Text style={styles.emptyText}>No hay clientes cargados</Text>
