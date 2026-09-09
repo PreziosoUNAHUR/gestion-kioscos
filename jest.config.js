@@ -37,4 +37,13 @@ module.exports = {
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-clone-referenced-element|victory-native|@shopify/react-native-skia)',
   ],
+  coveragePathIgnorePatterns: [
+  "/node_modules/",
+  "/app/\\+html\\.tsx",
+  "/components/ui/",
+  "/constants/",
+  "/hooks/",
+  "/scripts/",
+  "expo-env.d.ts"
+  ],
 };

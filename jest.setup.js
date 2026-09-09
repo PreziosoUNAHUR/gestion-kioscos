@@ -37,6 +37,14 @@ jest.mock('@expo/vector-icons', () => {
   };
 });
 
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
+  useFocusEffect: (cb) => cb(),
+  useLocalSearchParams: () => ({}),
+  Link: ({ children }) => children,
+  Stack: { Screen: () => null },
+}));
+
 jest.mock('expo-camera', () => ({
   CameraView: () => null,
   useCameraPermissions: () => [{ granted: true }, jest.fn()],

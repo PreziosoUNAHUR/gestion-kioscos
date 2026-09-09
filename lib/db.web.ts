@@ -12,6 +12,7 @@ export interface Venta {
   id: number;
   total: number;
   fecha: string;
+  metodo_pago?: string | null;
 }
 
 export interface Cliente {
@@ -99,19 +100,19 @@ export async function actualizarStock(id: number, nuevaCantidad: number): Promis
   }
 }
 
-export async function registrarVenta(total: number): Promise<number> {
+export async function registrarVenta(total: number, metodo_pago: string | null = null): Promise<number> {
   const list = getStorage<Venta[]>('kiosco_ventas', []);
   const id = list.length > 0 ? Math.max(...list.map((v) => v.id)) + 1 : 1;
-  const venta: Venta = { id, total, fecha: new Date().toISOString() };
+  const venta: Venta = { id, total, fecha: new Date().toISOString(), metodo_pago };
   list.push(venta);
   setStorage('kiosco_ventas', list);
   return id;
 }
 
-export async function realizarVenta(items: VentaItem[]): Promise<void> {
+export async function realizarVenta(items: VentaItem[], metodo_pago: string | null = null): Promise<void> {
   if (items.length === 0) return;
   const total = items.reduce((s, i) => s + i.subtotal, 0);
-  await registrarVenta(total);
+  await registrarVenta(total, metodo_pago);
   for (const item of items) {
     await actualizarStock(item.productoId, item.nuevoStock);
   }

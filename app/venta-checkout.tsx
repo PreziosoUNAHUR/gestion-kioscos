@@ -12,9 +12,10 @@ export default function VentaCheckoutScreen() {
   const router = useRouter();
   const { cart: cartParam } = useLocalSearchParams<{ cart?: string; total?: string }>();
   const [lines, setLines] = useState<CartLine[]>([]);
-  const [metodo, setMetodo] = useState<'efectivo' | 'mp' | 'dni'>('efectivo');
+  const [metodo, setMetodo] = useState<'efectivo' | 'mp' | 'dni' | null>(null);
   const [montoPagado, setMontoPagado] = useState('');
   const [showFiado, setShowFiado] = useState(false);
+  const [showPago, setShowPago] = useState(false);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -36,7 +37,7 @@ export default function VentaCheckoutScreen() {
     }
   };
 
-  const confirmar = async () => {
+  const onConfirmarPress = () => {
     if (lines.length === 0) {
       Alert.alert('Carrito vacío', 'No hay productos');
       return;
@@ -47,9 +48,22 @@ export default function VentaCheckoutScreen() {
         return;
       }
     }
+    setShowPago(true);
+  };
+
+  const onPagoSelect = async (m: 'efectivo' | 'mp' | 'dni') => {
+    setMetodo(m);
+    setShowPago(false);
+    // pequeño delay para que cierre el dialog antes de validar monto
+    setTimeout(() => confirmar(m), 150);
+  };
+
+  const confirmar = async (metodoElegido: 'efectivo' | 'mp' | 'dni' = metodo || 'efectivo') => {
     const pagado = parseFloat(montoPagado.replace(',', '.')) || 0;
-    if (pagado < total) {
-      const falta = total - pagado;
+    // si no ingresó monto, asumimos pago total con el método elegido
+    const efectivoPagado = montoPagado.trim() === '' ? total : pagado;
+    if (efectivoPagado < total) {
+      const falta = total - efectivoPagado;
       Alert.alert(
         'Pago incompleto',
         `Faltan $${falta.toLocaleString('es-AR')}. ¿Querés cargarlo a fiado?`,
@@ -67,14 +81,12 @@ export default function VentaCheckoutScreen() {
       );
       return;
     }
-    await finalizarVenta();
+    await finalizarVenta(metodoElegido);
   };
 
-  const finalizarVenta = async (clienteFiado?: Cliente) => {
+  const finalizarVenta = async (metodoFinal: 'efectivo' | 'mp' | 'dni' = metodo || 'efectivo') => {
     setSaving(true);
     try {
-      const pagado = parseFloat(montoPagado.replace(',', '.')) || total;
-      const falta = Math.max(0, total - pagado);
       await realizarVenta(
         lines.map((l) => ({
           productoId: l.producto.id,
@@ -82,17 +94,11 @@ export default function VentaCheckoutScreen() {
           subtotal: l.producto.precio_venta * l.qty,
           nuevoStock: l.producto.stock - l.qty,
         })),
+        metodoFinal === 'efectivo' ? 'billete' : metodoFinal,
       );
-      if (falta > 0 && clienteFiado) {
-        await actualizarDeuda(clienteFiado.id, clienteFiado.deuda + falta);
-        Alert.alert('Venta y fiado registrados', `Fiado $${falta} a ${clienteFiado.nombre}`, [
-          { text: 'OK', onPress: () => router.replace('/(tabs)' as never) },
-        ]);
-      } else {
-        Alert.alert('Venta registrada', `Total $${total} cobrado con ${metodo}`, [
-          { text: 'OK', onPress: () => router.replace('/(tabs)' as never) },
-        ]);
-      }
+      Alert.alert('Venta registrada', `Total $${total} cobrado con ${metodoFinal === 'efectivo' ? 'billete' : metodoFinal}`, [
+        { text: 'OK', onPress: () => router.replace('/(tabs)' as never) },
+      ]);
     } catch (err) {
       console.error(err);
       Alert.alert('Error', 'No se pudo completar la venta');
@@ -118,6 +124,7 @@ export default function VentaCheckoutScreen() {
           subtotal: l.producto.precio_venta * l.qty,
           nuevoStock: l.producto.stock - l.qty,
         })),
+        metodo || 'efectivo',
       );
       await actualizarDeuda(cliente.id, cliente.deuda + falta);
       Alert.alert('Venta y fiado registrados', `Fiado $${falta} a ${cliente.nombre}`, [
@@ -169,24 +176,16 @@ export default function VentaCheckoutScreen() {
           )}
           ListHeaderComponent={
             <View>
-              <Text style={styles.sectionTitle}>¿Cómo te están pagando?</Text>
-              <View style={styles.pagoRow}>
-                {[
-                  { id: 'efectivo', label: 'Efectivo' },
-                  { id: 'mp', label: 'Mercado Pago' },
-                  { id: 'dni', label: 'Cuenta DNI' },
-                ].map((m) => (
-                  <TouchableOpacity
-                    key={m.id}
-                    style={[styles.pagoBtn, metodo === m.id && styles.pagoBtnActive]}
-                    onPress={() => setMetodo(m.id as any)}>
-                    <Text style={[styles.pagoText, metodo === m.id && styles.pagoTextActive]}>{m.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {metodo && (
+                <View style={styles.metodoBadge}>
+                  <Text style={styles.metodoBadgeText}>
+                    Pagando con: {metodo === 'efectivo' ? 'Billete' : metodo === 'mp' ? 'Mercado Pago' : 'Cuenta DNI'}
+                  </Text>
+                </View>
+              )}
               <TextInput
                 style={styles.input}
-                placeholder={`Monto pagado (total $${total})`}
+                placeholder={`Monto pagado (total $${total}) — vacío = total completo`}
                 placeholderTextColor="#94A3B8"
                 keyboardType="decimal-pad"
                 value={montoPagado}
@@ -206,13 +205,33 @@ export default function VentaCheckoutScreen() {
             contentStyle={styles.confirmContent}
             loading={saving}
             disabled={saving}
-            onPress={confirmar}>
-            Confirmar venta
+            onPress={onConfirmarPress}>
+            Finalizar
           </Button>
         </View>
       </View>
 
       <Portal>
+        <Dialog visible={showPago} onDismiss={() => setShowPago(false)}>
+          <Dialog.Title style={styles.dialogTitle}>¿Cómo te están pagando?</Dialog.Title>
+          <Dialog.Content>
+            <TouchableOpacity style={styles.pagoOption} onPress={() => onPagoSelect('efectivo')}>
+              <Ionicons name="cash-outline" size={22} color="#10B981" />
+              <Text style={styles.pagoOptionText}>Billete</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.pagoOption} onPress={() => onPagoSelect('mp')}>
+              <Ionicons name="qr-code-outline" size={22} color="#0284C7" />
+              <Text style={styles.pagoOptionText}>Mercado Pago</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.pagoOption} onPress={() => onPagoSelect('dni')}>
+              <Ionicons name="phone-portrait-outline" size={22} color="#16A34A" />
+              <Text style={styles.pagoOptionText}>Cuenta DNI</Text>
+            </TouchableOpacity>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowPago(false)}>Cancelar</Button>
+          </Dialog.Actions>
+        </Dialog>
         <Dialog visible={showFiado} onDismiss={() => setShowFiado(false)}>
           <Dialog.Title style={styles.dialogTitle}>Elegí el cliente para fiado</Dialog.Title>
           <Dialog.Content>
@@ -260,6 +279,24 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   totalText: { fontFamily: 'Satoshi-Bold', fontSize: 16, color: '#0F172A', textAlign: 'right', marginBottom: 12 },
+  metodoBadge: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 10,
+  },
+  metodoBadgeText: { fontFamily: 'Satoshi-Bold', fontSize: 13, color: '#2547F4' },
+  pagoOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  pagoOptionText: { fontFamily: 'Satoshi-Medium', fontSize: 15, color: '#0F172A' },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

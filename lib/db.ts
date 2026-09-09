@@ -17,6 +17,7 @@ export interface Venta {
   id: number;
   total: number;
   fecha: string;
+  metodo_pago?: string | null;
 }
 
 export interface Cliente {
@@ -66,7 +67,8 @@ export async function initDatabase(): Promise<void> {
     CREATE TABLE IF NOT EXISTS Ventas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       total REAL NOT NULL,
-      fecha TEXT NOT NULL
+      fecha TEXT NOT NULL,
+      metodo_pago TEXT
     );
 
     CREATE TABLE IF NOT EXISTS Clientes (
@@ -84,6 +86,9 @@ export async function initDatabase(): Promise<void> {
   `);
   try {
     await db.execAsync('ALTER TABLE Productos ADD COLUMN barcode TEXT');
+  } catch {}
+  try {
+    await db.execAsync('ALTER TABLE Ventas ADD COLUMN metodo_pago TEXT');
   } catch {}
 }
 
@@ -113,13 +118,14 @@ export async function actualizarStock(id: number, nuevaCantidad: number): Promis
   await db.runAsync('UPDATE Productos SET stock = ? WHERE id = ?', nuevaCantidad, id);
 }
 
-export async function registrarVenta(total: number): Promise<number> {
+export async function registrarVenta(total: number, metodo_pago: string | null = null): Promise<number> {
   const db = await openDB();
   const fecha = new Date().toISOString();
   const result = await db.runAsync(
-    'INSERT INTO Ventas (total, fecha) VALUES (?, ?)',
+    'INSERT INTO Ventas (total, fecha, metodo_pago) VALUES (?, ?, ?)',
     total,
     fecha,
+    metodo_pago,
   );
   return result.lastInsertRowId;
 }
@@ -131,7 +137,7 @@ export interface VentaItem {
   nuevoStock: number;
 }
 
-export async function realizarVenta(items: VentaItem[]): Promise<void> {
+export async function realizarVenta(items: VentaItem[], metodo_pago: string | null = null): Promise<void> {
   const db = await openDB();
   if (items.length === 0) return;
 
@@ -139,7 +145,7 @@ export async function realizarVenta(items: VentaItem[]): Promise<void> {
   const fecha = new Date().toISOString();
 
   await db.withExclusiveTransactionAsync(async (txn) => {
-    await txn.runAsync('INSERT INTO Ventas (total, fecha) VALUES (?, ?)', total, fecha);
+    await txn.runAsync('INSERT INTO Ventas (total, fecha, metodo_pago) VALUES (?, ?, ?)', total, fecha, metodo_pago);
     for (const item of items) {
       await txn.runAsync(
         'UPDATE Productos SET stock = ? WHERE id = ?',
