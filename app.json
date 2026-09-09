@@ -2,7 +2,7 @@
   "expo": {
     "name": "Gestor Kioskos",
     "slug": "gestor-kioskos",
-    "version": "0.2.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "gestorkioskos",
@@ -22,7 +22,7 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
@@ -30,8 +30,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 400,
-          "resizeMode": "contain",
+          "resizeMode": "cover",
           "backgroundColor": "#1837A3",
           "dark": {
             "backgroundColor": "#1837A3"
