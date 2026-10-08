@@ -1,27 +1,33 @@
-# Kiosco Manager
+# 📱 Kiosco Manager
 
-## 📱 Aplicación de Gestión de Kiosco
+Una aplicación móvil integral desarrollada en **React Native (Expo)** y **TypeScript** para la gestión completa de negocios minoristas.
 
-Una aplicación completa para la gestión de un kiosco, con funcionalidades de ventas, inventario, proveedores, clientes y estadísticas.
+El proyecto implementa una arquitectura modular que separa claramente la lógica de negocio de la presentación visual, utilizando **SQLite** para la persistencia de datos local y garantizando disponibilidad offline.
 
-### 📋 Descripción general
+## 🚀 Características Principales
 
-Esta aplicación está construida con **Expo Router** (rutas basadas en archivos) y **React Native**, con una arquitectura que separa claramente la lógica de negocio de la presentación visual.
+*   **🛒 Punto de Venta (POS):** Ventas manuales y por código de barras.
+*   **📦 Gestión de Inventario:** Búsqueda y lista de productos con stock.
+*   **💰 Finanzas y Caja:** Cierre de caja con registro de billetes, Cuenta DNI y Mercado Pago.
+*   **📊 Analítica de Datos:** KPIs semanales y mensuales con gráficos.
+*   **👥 Gestión de Clientes:** Sistema de fiado (crédito/a favor).
+*   **🤝 Integración de Proveedores:** Gestión de proveedores con WhatsApp integration.
+*   **📈 Reportes:** Exportación a CSV y Email.
 
-### 🛠️ Características Principales
+## 🛠️ Stack Tecnológico y Arquitectura
 
-- **🛒 Carrito de Ventas**: Ventas manuales y por código de barras
-- **📦 Inventario**: Búsqueda y lista de productos con stock
-- **💰 Cierre de Caja**: Registro de billetes, Cuenta DNI y Mercado Pago
-- **📊 Estadísticas**: KPIs semanales y mensuales con gráficos
-- **👥 Clientes**: Sistema de fiado (crédito/a favor)
-- **👥 Proveedores**: Gestión de proveedores con WhatsApp integration
-- **📈 Reportes**: Exportación a CSV y Email
+Hemos consolidado tus librerías críticas, de UI y utilerías en una sección más limpia:
 
-### 📱 Pantallas Principales
+*   **Core:** `expo-router` para enrutamiento basado en archivos y `@react-navigation/native`.
+*   **Base de Datos:** `expo-sqlite` (Gestión relacional local para Productos, Ventas, Clientes y Proveedores).
+*   **UI/UX:** `react-native-paper` con tema Material Design, íconos de `react-native-vector-icons`, y `react-native-reanimated` para animaciones fluidas (como el efecto 'shift' entre pestañas).
+*   **Visualización de Datos:** `victory-native` y `@shopify/react-native-skia` para gráficos vectoriales de alta performance.
+*   **Hardware y Utilidades:** `expo-image-picker` para acceso a la cámara, `expo-mail-composer` para envíos de reportes y `Linking` para aperturas de URLs externas.
+
+## 📱 Pantallas Principales
 
 | Pantalla | Descripción |
-|----------|-------------|
+| :--- | :--- |
 | **Home** | Buscador inteligente + 2 botones principales (Venta, Agregar Stock) |
 | **Inventario** | Lista completa de productos con búsqueda y stock bajo |
 | **Caja** | Total facturado, historial de ventas, reportes |
@@ -32,46 +38,9 @@ Esta aplicación está construida con **Expo Router** (rutas basadas en archivos
 | **Gestor de Proveedores** | Lista con WhatsApp integration |
 | **Clientes (Fiado)** | Deuda management con sistema de a favor |
 
-### 📦 Dependencias Instaladas
+## 🏗️ Estructura del Proyecto
 
-#### Librerías Críticas
-
-| Librería | Propósito |
-|----------|-----------|
-| `expo-sqlite` | Base de datos SQLite local. Persistencia de datos entre sesiones. Usado para Productos, Ventas, Clientes y Proveedores. |
-| `expo-image-picker` | Acceso a la cámara y galería para tomar fotos de productos. |
-| `expo-mail-composer` | Envío de emails con reportes de ventas, estadísticas y detalles de caja. |
-| `victory-native` + `@shopify/react-native-skia` | Gráficos y charts para la pantalla de Estadísticas (barras, pastel). Victoria tiene 367K descargas/semana. |
-| `react-native-paper` | Componentes de UI profesionales (Buttons, Cards, Dialogs, Portal) con tema Material Design. |
-
-| Librería | Propósito |
-|----------|-----------|
-| `react-native-gesture-handler` | Gestos táctiles nativos (swipes, pans). |
-| `react-native-reanimated` | Animaciones fluidas (animación 'shift' entre pestañas). |
-| `@shopify/react-native-skia` | Motor de renderizado Skia para gráficos vectoriales de alta performance. |
-
-#### Librerías de UI y Navegación
-
-| Librería | Propósito |
-|----------|-----------|
-| `react-native-paper` | Componentes de UI profesionales (Buttons, Cards, Dialogs, Portal) con tema Material Design. |
-| `@react-navigation/native` | Navegación base entre pantallas. |
-| `@react-navigation/bottom-tabs` | Barra de tabs inferior con animación 'shift'. |
-| `@react-navigation/native-stack` | Navegación tipo stack para pantallas completas. |
-| `expo-router` | Enrutamiento basado en archivos (app/(tabs)/index.tsx). |
-
-#### Utilerías y Helpers
-
-| Librería | Propósito |
-|----------|-----------|
-| `expo-font` | Carga de fuentes personalizadas. |
-| `expo-status-bar` | Gestión de la barra de estado del sistema. |
-| `react-native-vector-icons` | Conjunto de íconos para la interfaz. |
-| ` Linking` | Apertura de URLs externas (WhatsApp, email, maps). |
-
-### 🏗️ Estructura del Proyecto
-
-```
+```text
 /app                    # Rutas y pantallas (Expo Router)
 /app/(tabs)/           # Pestañas inferiores (Home, Acciones, Estadísticas)
 /app/(tabs)/_layout.tsx # Configuración de tabs con animación 'shift'
@@ -91,17 +60,12 @@ Esta aplicación está construida con **Expo Router** (rutas basadas en archivos
 /app/caja.tsx           # Pantalla de caja con total y historial
 /app/estadisticas.tsx   # Pantalla de estadísticas con gráficos
 
-```
 
-### 🚀 Scripts Disponibles
-
-```bash
+🚀 Scripts Disponibles
 npm install          # Instalar dependencias
 npx expo start       # Iniciar servidor de desarrollo
 npx expo start --web # Versión web
 npx expo reset       # Resetear el proyecto
 npm run lint         # Linting de código
-```
 
-
-Desarrollado por Franco1 usando Expo y React Native.
+Desarrollado por Franco Prezioso

@@ -1,10 +1,22 @@
-import { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Alert, TextInput } from 'react-native';
-import { Ionicons, Feather } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import {
+  etiquetaMetodo,
+  getClientes,
+  parseMonto,
+  realizarVenta,
+  redondearDinero,
+  StockInsuficienteError,
+  toCents,
+  VentaInvalidaError,
+  type Cliente,
+  type MetodoPago,
+  type Producto,
+} from '@/lib/db';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Button, Dialog, Portal } from 'react-native-paper';
-import { realizarVenta, getClientes, actualizarDeuda, type Producto, type Cliente } from '@/lib/db';
 
 type CartLine = { producto: Producto; qty: number };
 
@@ -12,34 +24,109 @@ export default function VentaCheckoutScreen() {
   const router = useRouter();
   const { cart: cartParam } = useLocalSearchParams<{ cart?: string; total?: string }>();
   const [lines, setLines] = useState<CartLine[]>([]);
-  const [metodo, setMetodo] = useState<'efectivo' | 'mp' | 'dni' | null>(null);
+  const [metodo, setMetodo] = useState<MetodoPago | null>(null);
   const [montoPagado, setMontoPagado] = useState('');
+  const [faltaFiado, setFaltaFiado] = useState(0);
   const [showFiado, setShowFiado] = useState(false);
   const [showPago, setShowPago] = useState(false);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // Guard síncrono anti doble toque y flag de venta ya completada
+  const busyRef = useRef(false);
+  const completedRef = useRef(false);
+
   useEffect(() => {
-    if (cartParam) {
-      try {
-        setLines(JSON.parse(cartParam));
-      } catch {}
+    if (!cartParam) return;
+    try {
+      const parsed = JSON.parse(cartParam);
+      if (Array.isArray(parsed)) {
+        setLines(
+          parsed.filter(
+            (l): l is CartLine =>
+              l &&
+              typeof l.qty === 'number' &&
+              l.qty > 0 &&
+              l.producto &&
+              typeof l.producto.id === 'number',
+          ),
+        );
+      }
+    } catch (err) {
+      console.error('Error al leer el carrito:', err);
+      Alert.alert('Error', 'No se pudo cargar el carrito de la venta.');
     }
   }, [cartParam]);
 
-  const total = lines.reduce((s, l) => s + l.producto.precio_venta * l.qty, 0);
+  // Cálculo del total en centavos para evitar el bug de punto flotante (ej. 33.7 * 3 = 101.10000000000001)
+  const total = useMemo(() => {
+    const totalCents = lines.reduce(
+      (sumCents, l) => sumCents + toCents(l.producto.precio_venta) * l.qty,
+      0,
+    );
+    return redondearDinero(totalCents / 100);
+  }, [lines]);
 
-  const setQty = (id: number, qty: number) => {
+  // Cálculo en vivo de vuelto o monto inválido para ayudar al kiosquero
+  const estadoMonto = useMemo(() => {
+    const raw = montoPagado.trim();
+    if (!raw) return { valido: true, pagado: total, vuelto: 0, falta: 0 };
+    const parsed = parseMonto(raw);
+    if (parsed === null) return { valido: false, pagado: 0, vuelto: 0, falta: 0 };
+    const diffCents = toCents(parsed) - toCents(total);
+    return {
+      valido: true,
+      pagado: redondearDinero(parsed),
+      vuelto: diffCents > 0 ? redondearDinero(diffCents / 100) : 0,
+      falta: diffCents < 0 ? redondearDinero(Math.abs(diffCents) / 100) : 0,
+    };
+  }, [montoPagado, total]);
+
+  const setQty = useCallback((id: number, qty: number) => {
+    if (busyRef.current || completedRef.current) return;
     if (qty <= 0) {
       setLines((prev) => prev.filter((l) => l.producto.id !== id));
     } else {
       setLines((prev) => prev.map((l) => (l.producto.id === id ? { ...l, qty } : l)));
     }
+  }, []);
+
+  const runExclusive = async (fn: () => Promise<void>) => {
+    if (busyRef.current || completedRef.current) return;
+    busyRef.current = true;
+    setSaving(true);
+    try {
+      await fn();
+    } finally {
+      // Si la venta ya se completó, mantenemos bloqueado el botón mientras está el Alert en pantalla
+      if (!completedRef.current) {
+        busyRef.current = false;
+        setSaving(false);
+      }
+    }
+  };
+
+  const mostrarErrorVenta = (err: unknown) => {
+    console.error(err);
+    if (err instanceof StockInsuficienteError || err instanceof VentaInvalidaError) {
+      Alert.alert('No se pudo registrar la venta', err.message);
+      return;
+    }
+    if (err instanceof Error && err.message) {
+      Alert.alert('Error', err.message);
+      return;
+    }
+    Alert.alert('Error', 'No se pudo completar la venta.');
   };
 
   const onConfirmarPress = () => {
+    if (busyRef.current || completedRef.current) return;
     if (lines.length === 0) {
-      Alert.alert('Carrito vacío', 'No hay productos');
+      Alert.alert('Carrito vacío', 'No hay productos en la venta.');
+      return;
+    }
+    if (!estadoMonto.valido) {
+      Alert.alert('Monto inválido', 'Ingresá un monto pagado válido (o dejalo vacío para cobrar el total).');
       return;
     }
     for (const line of lines) {
@@ -51,19 +138,21 @@ export default function VentaCheckoutScreen() {
     setShowPago(true);
   };
 
-  const onPagoSelect = async (m: 'efectivo' | 'mp' | 'dni') => {
+  const onPagoSelect = async (m: MetodoPago) => {
+    if (busyRef.current || completedRef.current) return;
     setMetodo(m);
     setShowPago(false);
-    // pequeño delay para que cierre el dialog antes de validar monto
-    setTimeout(() => confirmar(m), 150);
+    await confirmar(m);
   };
 
-  const confirmar = async (metodoElegido: 'efectivo' | 'mp' | 'dni' = metodo || 'efectivo') => {
-    const pagado = parseFloat(montoPagado.replace(',', '.')) || 0;
-    // si no ingresó monto, asumimos pago total con el método elegido
-    const efectivoPagado = montoPagado.trim() === '' ? total : pagado;
-    if (efectivoPagado < total) {
-      const falta = total - efectivoPagado;
+  const confirmar = async (metodoElegido: MetodoPago = metodo || 'billete') => {
+    if (!estadoMonto.valido) {
+      Alert.alert('Monto inválido', 'Revisá el monto ingresado antes de continuar.');
+      return;
+    }
+
+    if (estadoMonto.falta > 0) {
+      const falta = estadoMonto.falta;
       Alert.alert(
         'Pago incompleto',
         `Faltan $${falta.toLocaleString('es-AR')}. ¿Querés cargarlo a fiado?`,
@@ -72,69 +161,75 @@ export default function VentaCheckoutScreen() {
           {
             text: 'Cargar a fiado',
             onPress: async () => {
-              const lista = await getClientes();
-              setClientes(lista);
-              setShowFiado(true);
+              try {
+                const lista = await getClientes();
+                setFaltaFiado(falta);
+                setClientes(lista);
+                setShowFiado(true);
+              } catch (err) {
+                mostrarErrorVenta(err);
+              }
             },
           },
         ],
       );
       return;
     }
-    await finalizarVenta(metodoElegido);
+
+    await runExclusive(() => finalizarVenta(metodoElegido, estadoMonto.vuelto));
   };
 
-  const finalizarVenta = async (metodoFinal: 'efectivo' | 'mp' | 'dni' = metodo || 'efectivo') => {
-    setSaving(true);
+  const finalizarVenta = async (metodoFinal: MetodoPago = metodo || 'billete', vuelto = 0) => {
     try {
       await realizarVenta(
         lines.map((l) => ({
           productoId: l.producto.id,
           cantidad: l.qty,
-          subtotal: l.producto.precio_venta * l.qty,
-          nuevoStock: l.producto.stock - l.qty,
         })),
-        metodoFinal === 'efectivo' ? 'billete' : metodoFinal,
+        metodoFinal,
       );
-      Alert.alert('Venta registrada', `Total $${total} cobrado con ${metodoFinal === 'efectivo' ? 'billete' : metodoFinal}`, [
-        { text: 'OK', onPress: () => router.replace('/(tabs)' as never) },
-      ]);
+      completedRef.current = true;
+      const detalleVuelto = vuelto > 0 ? `\nVuelto: $${vuelto.toLocaleString('es-AR')}` : '';
+      Alert.alert(
+        'Venta registrada',
+        `Total $${total.toLocaleString('es-AR')} cobrado con ${etiquetaMetodo(metodoFinal)}${detalleVuelto}`,
+        [{ text: 'OK', onPress: () => router.replace('/(tabs)' as never) }],
+        { cancelable: false },
+      );
     } catch (err) {
-      console.error(err);
-      Alert.alert('Error', 'No se pudo completar la venta');
-    } finally {
-      setSaving(false);
+      mostrarErrorVenta(err);
     }
   };
 
   const elegirClienteFiado = async (cliente: Cliente) => {
+    if (busyRef.current || completedRef.current) return;
     setShowFiado(false);
-    const pagado = parseFloat(montoPagado.replace(',', '.')) || 0;
-    const falta = total - pagado;
-    await finalizarVentaConFiado(cliente, falta);
+    const falta = faltaFiado > 0 ? faltaFiado : estadoMonto.falta;
+    if (falta <= 0) return;
+    await runExclusive(() => finalizarVentaConFiado(cliente, falta));
   };
 
   const finalizarVentaConFiado = async (cliente: Cliente, falta: number) => {
-    setSaving(true);
+    const metodoFinal: MetodoPago = metodo || 'billete';
     try {
       await realizarVenta(
         lines.map((l) => ({
           productoId: l.producto.id,
           cantidad: l.qty,
-          subtotal: l.producto.precio_venta * l.qty,
-          nuevoStock: l.producto.stock - l.qty,
         })),
-        metodo || 'efectivo',
+        metodoFinal,
+        { clienteId: cliente.id, monto: falta },
       );
-      await actualizarDeuda(cliente.id, cliente.deuda + falta);
-      Alert.alert('Venta y fiado registrados', `Fiado $${falta} a ${cliente.nombre}`, [
-        { text: 'OK', onPress: () => router.replace('/(tabs)' as never) },
-      ]);
+      completedRef.current = true;
+      const cobradoHoy = redondearDinero(total - falta);
+      Alert.alert(
+        'Venta y fiado registrados',
+        `Cobrado: $${cobradoHoy.toLocaleString('es-AR')} (${etiquetaMetodo(metodoFinal)})\nFiado a ${cliente.nombre}: $${falta.toLocaleString('es-AR')}`,
+        [{ text: 'OK', onPress: () => router.replace('/(tabs)' as never) }],
+        { cancelable: false },
+      );
     } catch (err) {
-      console.error(err);
-      Alert.alert('Error', 'No se pudo completar');
-    } finally {
-      setSaving(false);
+      mostrarErrorVenta(err);
     }
   };
 
@@ -143,7 +238,7 @@ export default function VentaCheckoutScreen() {
       <View style={styles.container}>
         <StatusBar style="dark" />
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity disabled={saving} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color="#0F172A" />
           </TouchableOpacity>
           <Text style={styles.title}>Confirmar Venta</Text>
@@ -161,14 +256,22 @@ export default function VentaCheckoutScreen() {
                 <Text style={styles.cardName} numberOfLines={1}>
                   {item.producto.nombre}
                 </Text>
-                <Text style={styles.cardPrice}>${item.producto.precio_venta} x {item.qty}</Text>
+                <Text style={styles.cardPrice}>
+                  ${item.producto.precio_venta.toLocaleString('es-AR')} x {item.qty}
+                </Text>
               </View>
               <View style={styles.stepper}>
-                <TouchableOpacity style={styles.stepperBtn} onPress={() => setQty(item.producto.id, item.qty - 1)}>
+                <TouchableOpacity
+                  style={styles.stepperBtn}
+                  disabled={saving}
+                  onPress={() => setQty(item.producto.id, item.qty - 1)}>
                   <Feather name="minus" size={16} color="#0F172A" />
                 </TouchableOpacity>
                 <Text style={styles.stepperQty}>{item.qty}</Text>
-                <TouchableOpacity style={[styles.stepperBtn, styles.stepperBtnAdd]} onPress={() => setQty(item.producto.id, item.qty + 1)}>
+                <TouchableOpacity
+                  style={[styles.stepperBtn, styles.stepperBtnAdd]}
+                  disabled={saving}
+                  onPress={() => setQty(item.producto.id, item.qty + 1)}>
                   <Feather name="plus" size={16} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
@@ -178,19 +281,31 @@ export default function VentaCheckoutScreen() {
             <View>
               {metodo && (
                 <View style={styles.metodoBadge}>
-                  <Text style={styles.metodoBadgeText}>
-                    Pagando con: {metodo === 'efectivo' ? 'Billete' : metodo === 'mp' ? 'Mercado Pago' : 'Cuenta DNI'}
-                  </Text>
+                  <Text style={styles.metodoBadgeText}>Pagando con: {etiquetaMetodo(metodo)}</Text>
                 </View>
               )}
               <TextInput
-                style={styles.input}
-                placeholder={`Monto pagado (total $${total}) — vacío = total completo`}
+                style={[styles.input, !estadoMonto.valido && styles.inputError]}
+                placeholder={`Monto pagado (total $${total.toLocaleString('es-AR')}) — vacío = total completo`}
                 placeholderTextColor="#94A3B8"
                 keyboardType="decimal-pad"
+                editable={!saving}
                 value={montoPagado}
                 onChangeText={setMontoPagado}
               />
+              {!estadoMonto.valido && (
+                <Text style={styles.helperError}>Ingresá un número válido mayor o igual a 0</Text>
+              )}
+              {estadoMonto.valido && estadoMonto.vuelto > 0 && (
+                <Text style={styles.vueltoText}>
+                  Vuelto a entregar: ${estadoMonto.vuelto.toLocaleString('es-AR')}
+                </Text>
+              )}
+              {estadoMonto.valido && estadoMonto.falta > 0 && (
+                <Text style={styles.faltaText}>
+                  Restan ${estadoMonto.falta.toLocaleString('es-AR')} (se cargará a fiado)
+                </Text>
+              )}
               <Text style={styles.totalText}>Total: ${total.toLocaleString('es-AR')}</Text>
             </View>
           }
@@ -204,7 +319,7 @@ export default function VentaCheckoutScreen() {
             style={styles.confirmButton}
             contentStyle={styles.confirmContent}
             loading={saving}
-            disabled={saving}
+            disabled={saving || lines.length === 0}
             onPress={onConfirmarPress}>
             Finalizar
           </Button>
@@ -212,42 +327,70 @@ export default function VentaCheckoutScreen() {
       </View>
 
       <Portal>
-        <Dialog style={{ backgroundColor: '#FFFFFF' }} visible={showPago} onDismiss={() => setShowPago(false)}>
-          <Dialog.Title style={[styles.dialogTitle, { color: '#0F172A' }]}>¿Cómo te están pagando?</Dialog.Title>
+        <Dialog
+          style={{ backgroundColor: '#FFFFFF' }}
+          visible={showPago}
+          onDismiss={() => !saving && setShowPago(false)}>
+          <Dialog.Title style={[styles.dialogTitle, { color: '#0F172A' }]}>
+            ¿Cómo te están pagando?
+          </Dialog.Title>
           <Dialog.Content>
-            <TouchableOpacity style={styles.pagoOption} onPress={() => onPagoSelect('efectivo')}>
+            <TouchableOpacity
+              style={styles.pagoOption}
+              disabled={saving}
+              onPress={() => onPagoSelect('billete')}>
               <Ionicons name="cash-outline" size={22} color="#10B981" />
               <Text style={styles.pagoOptionText}>Billete</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.pagoOption} onPress={() => onPagoSelect('mp')}>
+            <TouchableOpacity
+              style={styles.pagoOption}
+              disabled={saving}
+              onPress={() => onPagoSelect('mercadopago')}>
               <Ionicons name="qr-code-outline" size={22} color="#0284C7" />
               <Text style={styles.pagoOptionText}>Mercado Pago</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.pagoOption} onPress={() => onPagoSelect('dni')}>
+            <TouchableOpacity
+              style={styles.pagoOption}
+              disabled={saving}
+              onPress={() => onPagoSelect('cuentadni')}>
               <Ionicons name="phone-portrait-outline" size={22} color="#16A34A" />
               <Text style={styles.pagoOptionText}>Cuenta DNI</Text>
             </TouchableOpacity>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setShowPago(false)}><Text style={{ color: '#0F172A', fontFamily: 'Satoshi-Medium' }}>Cancelar</Text></Button>
+            <Button disabled={saving} onPress={() => setShowPago(false)}>
+              <Text style={{ color: '#0F172A', fontFamily: 'Satoshi-Medium' }}>Cancelar</Text>
+            </Button>
           </Dialog.Actions>
         </Dialog>
-        <Dialog style={{ backgroundColor: '#FFFFFF' }} visible={showFiado} onDismiss={() => setShowFiado(false)}>
-          <Dialog.Title style={[styles.dialogTitle, { color: '#0F172A' }]}>Elegí el cliente para fiado</Dialog.Title>
+
+        <Dialog
+          style={{ backgroundColor: '#FFFFFF' }}
+          visible={showFiado}
+          onDismiss={() => !saving && setShowFiado(false)}>
+          <Dialog.Title style={[styles.dialogTitle, { color: '#0F172A' }]}>
+            Elegí el cliente para fiado
+          </Dialog.Title>
           <Dialog.Content>
             {clientes.length === 0 ? (
               <Text style={styles.emptyText}>No hay clientes cargados</Text>
             ) : (
               clientes.map((c) => (
-                <TouchableOpacity key={c.id} style={styles.clienteRow} onPress={() => elegirClienteFiado(c)}>
+                <TouchableOpacity
+                  key={c.id}
+                  style={styles.clienteRow}
+                  disabled={saving}
+                  onPress={() => elegirClienteFiado(c)}>
                   <Text style={styles.clienteName}>{c.nombre}</Text>
-                  <Text style={styles.clienteDeuda}>Debe ${c.deuda}</Text>
+                  <Text style={styles.clienteDeuda}>Debe ${c.deuda.toLocaleString('es-AR')}</Text>
                 </TouchableOpacity>
               ))
             )}
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setShowFiado(false)}>Cancelar</Button>
+            <Button disabled={saving} onPress={() => setShowFiado(false)}>
+              <Text style={{ color: '#0F172A', fontFamily: 'Satoshi-Medium' }}>Cancelar</Text>
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -260,12 +403,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   title: { fontFamily: 'Satoshi-Bold', fontSize: 20, color: '#0F172A' },
   listContent: { paddingBottom: 160 },
-  sectionTitle: { fontFamily: 'Satoshi-Bold', fontSize: 14, color: '#0F172A', marginBottom: 10, marginTop: 8 },
-  pagoRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  pagoBtn: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
-  pagoBtnActive: { backgroundColor: '#2547F4', borderColor: '#2547F4' },
-  pagoText: { fontFamily: 'Satoshi-Medium', fontSize: 12, color: '#475569' },
-  pagoTextActive: { color: '#FFFFFF' },
   input: {
     fontFamily: 'Satoshi-Regular',
     height: 46,
@@ -276,7 +413,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0F172A',
     backgroundColor: '#FFFFFF',
-    marginBottom: 12,
+    marginBottom: 8,
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  helperError: {
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    color: '#EF4444',
+    marginBottom: 8,
+  },
+  vueltoText: {
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    color: '#16A34A',
+    textAlign: 'right',
+    marginBottom: 4,
+  },
+  faltaText: {
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 13,
+    color: '#D97706',
+    textAlign: 'right',
+    marginBottom: 4,
   },
   totalText: { fontFamily: 'Satoshi-Bold', fontSize: 16, color: '#0F172A', textAlign: 'right', marginBottom: 12 },
   metodoBadge: {
